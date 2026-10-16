@@ -26,6 +26,8 @@ jobs:
         run: npm run typecheck
       - name: Test
         run: npm test
+      - name: Interactive owner setup smoke test (Linux PTY)
+        run: python3 scripts/smoke-owner-cli.py
       - name: Build
         run: npm run build
       - name: Build Docker image
