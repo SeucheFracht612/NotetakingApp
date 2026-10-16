@@ -12,7 +12,7 @@ A personal, self-hostable research and lecture-note workspace. One owner per ins
 
 ## Local development
 
-1. Clone this repository and run **npm install**.
+1. Clone this repository and run **npm ci**.
 2. Optionally configure environment variables in your shell (see **.env.example**). Development defaults work without any .env file; environment files are *not* automatically loaded.
 3. Run **npm run owner:create** from an interactive terminal. Enter and confirm an owner password (at least 12 characters); input is hidden. This creates the sole owner, once per installation.
 4. Run **npm run dev**.

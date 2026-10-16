@@ -1,9 +1,9 @@
 FROM node:22-bookworm AS build
 WORKDIR /app
-COPY package.json ./
+COPY package.json package-lock.json ./
 COPY apps/server/package.json ./apps/server/package.json
 COPY apps/web/package.json ./apps/web/package.json
-RUN npm install --no-audit --no-fund
+RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build && npm prune --omit=dev
 
