@@ -1,0 +1,22 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      BIND_HOST: "0.0.0.0"
+      DATABASE_PATH: /data/notetaking.sqlite
+      APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN to your external HTTPS origin}
+    volumes:
+      - notes-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  notes-data:
