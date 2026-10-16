@@ -23,7 +23,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     }
     appOrigin = parsed.origin;
   } catch (error) {
-    throw new Error('Invalid APP_ORIGIN: ' + String(error));
+    throw new Error('Invalid APP_ORIGIN', { cause: error });
   }
   const port = Number(env.PORT ?? 3000);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
