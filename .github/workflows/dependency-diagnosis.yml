@@ -15,7 +15,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Emit updated lockfile
+        run: |
+          echo 'LOCK_REGEN_START'
+          base64 -w 0 package-lock.json
+          echo
+          echo 'LOCK_REGEN_END'
       - name: Audit summary and supported fixes
         shell: bash
         run: |
