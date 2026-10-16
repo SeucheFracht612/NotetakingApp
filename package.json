@@ -1,0 +1,32 @@
+{
+  "name": "notetaking-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "apps/web",
+    "apps/server"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n server,web \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm run dev --workspace @notetaking/server",
+    "dev:web": "npm run dev --workspace @notetaking/web",
+    "build": "npm run build --workspace @notetaking/web && npm run build --workspace @notetaking/server",
+    "typecheck": "npm run typecheck --workspace @notetaking/server && npm run typecheck --workspace @notetaking/web",
+    "lint": "eslint apps --ext .ts,.tsx",
+    "test": "npm run test --workspace @notetaking/server",
+    "migrate": "npm run migrate --workspace @notetaking/server",
+    "owner:create": "npm run owner:create --workspace @notetaking/server"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.1",
+    "@types/node": "22.18.6",
+    "concurrently": "9.2.1",
+    "eslint": "9.39.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.46.2"
+  }
+}
