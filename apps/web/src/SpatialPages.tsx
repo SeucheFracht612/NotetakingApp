@@ -167,7 +167,7 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
     // Capture AltGr+Arrow before ProseMirror processes keydown, including when
     // the caret is inside the editable page. Never intercept Ctrl+Arrow.
     if(preview || (event.target instanceof HTMLElement &&
-      ['INPUT','TEXTAREA','SELECT'].includes(event.target.tagName))) return;
+      ['INPUT','SELECT'].includes(event.target.tagName))) return;
     const side=spatialNavigationShortcut(event);
     if(side) {
       event.preventDefault();
