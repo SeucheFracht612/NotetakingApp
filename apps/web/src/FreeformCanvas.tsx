@@ -261,7 +261,18 @@ export function FreeformCard({noteId,item,zoom,selected,onSelect,onUpdate,onDele
         <span aria-hidden="true">⠿</span> {item.kind==='sticky'?'Sticky note':item.kind==='quote'?'Quotation':'Text card'}
       </button>
       <button type="button" className="freeform-dismiss" aria-label="Delete card"
-        onClick={()=>{if(window.confirm('Delete this card and all its text?'))void onDelete(item.id).catch(()=>{});}}>×</button>
+        onClick={()=>{
+          if(!window.confirm('Delete this card and all its text?'))return;
+          // Deletion is intentional: cancel pending debounced writes so that
+          // unmount cannot resurrect a newly deleted object via autosave.
+          if(timer.current){clearTimeout(timer.current);timer.current=null;}
+          statusRef.current='saved';
+          void onDelete(item.id).catch(cause=>{
+            putDraft(cacheKey,revisionRef.current,latest.current);
+            statusRef.current='error';setStatus('error');
+            setMessage(cause instanceof Error?cause.message:'Could not delete the card');
+          });
+        }}>×</button>
     </div>
     <textarea className="freeform-text" value={content} placeholder={
       item.kind==='quote'?'Paste or write a quotation…':item.kind==='sticky'?'Quick thought…':'Write anything…'}
