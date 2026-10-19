@@ -2,7 +2,7 @@
 
 A personal, self-hostable research and lecture-note workspace. One owner per installation; **no public registration, shared hosted service, or preconfigured credentials**.
 
-> **Status: Slice 0 — foundation.** Sign-in and an empty responsive workspace are implemented. Folders, notes, spatial page navigation, images, and PDF/ink functionality are **not** implemented yet. See [Issue #1](https://github.com/SeucheFracht612/NotetakingApp/issues/1).
+> **Status:** Slice 0 is merged into main. Slice 1 (nested folders and notes) is in [PR #4](https://github.com/SeucheFracht612/NotetakingApp/pull/4), on branch `feat/slice-1-library`. Spatial page navigation, rich-text editing, images, and PDF/ink are **not** implemented yet.
 
 ## Requirements
 
@@ -74,7 +74,7 @@ The app is single-user by design, but **not** single-installation. Anyone deploy
 
 ## Development roadmap
 
-- **Slice 1:** folder hierarchy and note library.
+- **Slice 1:** folder hierarchy and note library (in development on `feat/slice-1-library`).
 - **Slice 2:** sparse spatial page grid with **explicit directional edge attachments**. Adjacent pages are not automatically linked; navigation follows attachments only. Invalid insertions reject atomically.
 - **Slice 3:** rich-text editor and safe autosaving.
 - Later: asset blocks, checkpoints and off-site backups, PDFs, handwriting, Zotero, search, export.
@@ -82,3 +82,21 @@ The app is single-user by design, but **not** single-installation. Anyone deploy
 ## License
 
 The repository is public and intended to support self-hosting, but a redistribution license has **not yet been chosen**. Please get permission from the copyright holder before redistributing or publishing modifications. We will add an explicit license after that decision.
+
+
+## Test Slice 1 locally (feature branch)
+
+From an existing clone:
+
+    git fetch origin
+    git switch feat/slice-1-library
+    npm ci
+    npm run dev
+
+No need to recreate your owner account. SQLite migrations run automatically and add library tables without deleting your account or sessions. If you have a local production database with important data, make a consistent backup before testing new branches.
+
+In Firefox: create a top-level folder; add subfolders from the folder menu; create and open notes; rename/move items using their menus; change order with Move up/Move down. On desktop you can also drag a folder onto another folder to nest it. On tablets and keyboards use the menus rather than drag-and-drop. Selecting a note deliberately shows a placeholder until the editor slice.
+
+The \`GET /api/library\` endpoint returns flat \`folders\` and \`notes\` arrays with parent/folder IDs and sort keys; clients build the hierarchy. Protected mutation routes are \`POST/PATCH/DELETE /api/folders\` and \`POST/PATCH/DELETE /api/notes\` (PATCH/DELETE require a UUID in the URL). Request JSON for create: \`{ "name": "...", "parentId": null }\` or \`{ "title": "...", "folderId": "<uuid>" }\`. Rename/move/reorder using PATCH fields \`name\`/\`title\`, \`parentId\`/\`folderId\`, and/or \`beforeId\` (UUID of a sibling, or null for last position). JSON payloads are validated. Missing items return 404, malformed values return 400, invalid folder cycles / nonempty deletions return 409.
+
+Nonempty folders must be emptied or their contents moved first. Note deletion is permanent at this stage, so confirm carefully. Checkpoints/restore are not implemented yet.

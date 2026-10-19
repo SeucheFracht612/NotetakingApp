@@ -4,6 +4,7 @@ import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import type { AppDatabase } from './db.js';
 import type { AppConfig } from './config.js';
+import { registerLibraryRoutes } from './library-routes.js';
 import {
   clearSessionCookie, createSession, ownerForToken, revokeSession,
   sessionCookie, sessionFromCookie, verifyPassword
@@ -64,6 +65,10 @@ export async function buildApp({ db, config, serveWeb = false, logger = false }:
     reply.header('Cache-Control', 'no-store');
     return { success: true };
   });
+
+  await app.register(async (library) => {
+    registerLibraryRoutes(library, db);
+  }, { prefix: '/api' });
 
   if (serveWeb) {
     await app.register(fastifyStatic, {
