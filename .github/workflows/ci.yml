@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Dependency vulnerability audit
+        run: npm audit --audit-level=high
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+      - name: Interactive owner setup smoke test (Linux PTY)
+        run: python3 scripts/smoke-owner-cli.py
+      - name: Build
+        run: npm run build
+      - name: Build Docker image
+        run: docker build -t notetaking-app:ci .
+      - name: Smoke-test production container
+        run: |
+          docker run -d --name notetaking-ci -p 127.0.0.1:3185:3000 \
+            -e APP_ORIGIN=https://notes.example.test \
+            -e BIND_HOST=0.0.0.0 \
+            -e DATABASE_PATH=/data/notetaking.sqlite \
+            notetaking-app:ci
+          trap 'docker logs notetaking-ci; docker rm -f notetaking-ci' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3185/api/health | grep -q '"ok"'; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent --show-error http://127.0.0.1:3185/api/health | grep -q '"ok"'
+          curl --fail --silent --show-error http://127.0.0.1:3185/ | grep -q 'NotetakingApp'
+          status=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:3185/api/auth/me)
+          test "$status" = "401"
