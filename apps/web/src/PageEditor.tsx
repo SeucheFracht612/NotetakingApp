@@ -4,7 +4,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { getDraft, type JsonDoc, type PageDraft } from './document-autosave';
 
 interface Props { noteId: string; pageId: string; zoom: number }
-type TiptapContent = Parameters<NonNullable<ReturnType<typeof useEditor>>['commands']['setContent']>[0];
+type TiptapContent = NonNullable<Parameters<typeof useEditor>[0]['content']>;
 function Tool({label,action,disabled=false}: {label:string;action():void;disabled?:boolean}) {
   return <button type="button" className="page-format-button" title={label}
     disabled={disabled} onMouseDown={event=>event.preventDefault()} onClick={action}>{label}</button>;
