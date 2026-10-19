@@ -2,7 +2,7 @@
 
 A personal, self-hostable research and lecture-note workspace. One owner per installation; **no public registration, shared hosted service, or preconfigured credentials**.
 
-> **Status:** Slice 0 is merged into main. Slice 1 (nested folders and notes) is in [PR #4](https://github.com/SeucheFracht612/NotetakingApp/pull/4), on branch `feat/slice-1-library`. Spatial page navigation, rich-text editing, images, and PDF/ink are **not** implemented yet.
+> **Status:** Slice 0 and Slice 1 are merged into main. **Slice 2 spatial pages** is under review in [PR #6](https://github.com/SeucheFracht612/NotetakingApp/pull/6) on branch `feat/slice-2-spatial-pages`. Rich-text editing, images, and PDF/ink are **not** implemented yet.
 
 ## Requirements
 
@@ -100,3 +100,47 @@ In Firefox: create a top-level folder; add subfolders from the folder menu; crea
 The \`GET /api/library\` endpoint returns flat \`folders\` and \`notes\` arrays with parent/folder IDs and sort keys; clients build the hierarchy. Protected mutation routes are \`POST/PATCH/DELETE /api/folders\` and \`POST/PATCH/DELETE /api/notes\` (PATCH/DELETE require a UUID in the URL). Request JSON for create: \`{ "name": "...", "parentId": null }\` or \`{ "title": "...", "folderId": "<uuid>" }\`. Rename/move/reorder using PATCH fields \`name\`/\`title\`, \`parentId\`/\`folderId\`, and/or \`beforeId\` (UUID of a sibling, or null for last position). JSON payloads are validated. Missing items return 404, malformed values return 400, invalid folder cycles / nonempty deletions return 409.
 
 Nonempty folders must be emptied or their contents moved first. Note deletion is permanent at this stage, so confirm carefully. Checkpoints/restore are not implemented yet.
+
+
+## Try Slice 2: spatial pages (development branch)
+
+From your existing clone, stop the development server and run:
+
+    git fetch origin
+    git switch feat/slice-2-spatial-pages
+    npm ci
+    npm run dev
+
+Sign in and select a note in the sidebar. Click **Create first page** if that note does not yet contain pages. Pages have fixed A4 proportions (210:297) and positions on a signed integer grid. They remain blank in this slice; actual note editing follows in Slice 3.
+
+### Editing a page layout
+
+- Click a page on the canvas or minimap to select it.
+- Use the directional controls to **Go** to an explicitly attached neighbor, **Add** a page to an open edge, or **Insert** between attached pages. Every insertion shows a preview and requires confirmation.
+- Pages that merely touch on the grid are **not** automatically attached. Use **Attach existing** to create an explicit link to an adjacent unlinked page.
+- Use **Detach** to intentionally remove an attachment while retaining both pages and coordinates. Insertion operations never silently detach existing connections.
+- A connected B-side group shifts one cell when inserting between A and B. If that shift hits independent groups, the planner pushes each group rigidly in the same direction. If any pinned/anchored page would need to move, the whole insertion is rejected transactionally. Inserting into a cycle is rejected because A and B remain connected by another path.
+- A leaf page can be deleted after confirmation. Pages with two or more attachments cannot be deleted in this slice.
+- For attached-only navigation use the visible Go controls or **Meta/Super + Arrow** in the focused canvas. On Linux desktops where the window manager consumes Super/Meta key combinations, use **Ctrl + Shift + Arrow** as a fallback.
+- Scroll the canvas to pan, or use zoom and Center page. The overview lets you select any page.
+- The database records the complete layout under a per-note revision. If another tab changes the layout before you confirm, the server returns HTTP 409 and the UI reloads the newer version instead of overwriting it.
+
+**Persistence:** database migration 3 is additive; owner accounts, sessions, folders and note metadata are preserved. Back up any valuable local data before checking out development branches. Note-page content does not exist yet, and backups/checkpoints are not implemented.
+
+### Spatial page API
+
+These endpoints live under \`/api/notes/:noteId/pages\` and require the logged-in owner session. All mutations require the existing same-origin protections.
+
+| Method | Suffix | JSON body |
+| --- | --- | --- |
+| GET | (none) | no body; returns \`{noteId,version,pages,edges}\` |
+| POST | \`/initialize\` | \`{expectedVersion}\` — one initial page at (0,0) |
+| POST | \`/preview\` | \`{anchorId,direction,expectedVersion}\` — no writes |
+| POST | \`/insert\` | \`{anchorId,direction,expectedVersion}\` — transactionally apply insertion |
+| POST | \`/link\` | \`{fromPageId,toPageId,direction,expectedVersion}\` — attach adjacent pages |
+| POST | \`/unlink\` | \`{fromPageId,direction,expectedVersion}\` — explicitly remove a link |
+| DELETE | \`/:pageId\` | \`{expectedVersion}\` — delete a leaf page only |
+
+Directions are \`N\`, \`E\`, \`S\`, or \`W\`. Pages and edges have UUID IDs scoped to a note. A wrong layout version or impossible insertion returns HTTP 409; malformed requests return HTTP 400, missing notes return 404, and missing owner sessions return 401.
+
+The graph solver is pure and tested independently of SQLite. Its invariant checks require unique coordinates, signed bounds, at most one attachment per side, and exactly adjacent endpoints.
