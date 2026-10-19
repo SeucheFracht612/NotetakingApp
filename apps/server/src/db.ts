@@ -41,6 +41,36 @@ const libraryMigration = [
   'CREATE INDEX notes_folder_sort_idx ON notes(folder_id, sort_key, id);'
 ].join('\n');
 
+
+const pageMigration = [
+  'CREATE TABLE note_pages (',
+  '  id TEXT PRIMARY KEY,',
+  '  note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,',
+  '  gx INTEGER NOT NULL CHECK(gx BETWEEN -100000 AND 100000),',
+  '  gy INTEGER NOT NULL CHECK(gy BETWEEN -100000 AND 100000),',
+  '  created_at INTEGER NOT NULL,',
+  '  UNIQUE(note_id, id),',
+  '  UNIQUE(note_id, gx, gy)',
+  ');',
+  'CREATE INDEX note_pages_note_idx ON note_pages(note_id);',
+  'CREATE TABLE page_edges (',
+  '  id TEXT PRIMARY KEY,',
+  '  note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,',
+  '  from_page_id TEXT NOT NULL,',
+  '  to_page_id TEXT NOT NULL,',
+  "  direction TEXT NOT NULL CHECK(direction IN ('N','E','S','W')),",
+  '  CHECK(from_page_id <> to_page_id),',
+  '  FOREIGN KEY(note_id, from_page_id) REFERENCES note_pages(note_id, id) ON DELETE CASCADE,',
+  '  FOREIGN KEY(note_id, to_page_id) REFERENCES note_pages(note_id, id) ON DELETE CASCADE,',
+  '  UNIQUE(note_id, from_page_id, to_page_id)',
+  ');',
+  'CREATE INDEX page_edges_note_idx ON page_edges(note_id);',
+  'CREATE TABLE note_layouts (',
+  '  note_id TEXT PRIMARY KEY REFERENCES notes(id) ON DELETE CASCADE,',
+  '  version INTEGER NOT NULL DEFAULT 0 CHECK(version >= 0)',
+  ');'
+].join('\n');
+
 export function openDatabase(filename: string): AppDatabase {
   fs.mkdirSync(path.dirname(filename), { recursive: true });
   const db = new Database(filename);
@@ -53,7 +83,7 @@ export function openDatabase(filename: string): AppDatabase {
 
 export function migrate(db: AppDatabase): void {
   db.exec('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)');
-  const migrations = [{ version: 1, sql: initialMigration }, { version: 2, sql: libraryMigration }];
+  const migrations = [{ version: 1, sql: initialMigration }, { version: 2, sql: libraryMigration }, { version: 3, sql: pageMigration }];
   for (const migration of migrations) {
     db.transaction(() => {
       const existing = db.prepare('SELECT 1 FROM schema_migrations WHERE version = ?').get(migration.version);

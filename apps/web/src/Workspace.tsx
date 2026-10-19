@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, type DragEvent, type FormEvent } from 'react';
+import { SpatialPages } from './SpatialPages';
 
 export interface Owner {
   id: number;
@@ -384,20 +385,10 @@ export function Workspace({ owner, onLogout, authError }: WorkspaceProps) {
         </header>
         {error && <div className="library-error" role="alert">{error}<button type="button" aria-label="Dismiss error" onClick={() => setError('')}>×</button></div>}
         {authError && <div className="library-error" role="alert">{authError}</div>}
-        <div className="library-content">
+        <div className={'library-content'+(note?' library-content-spatial':'')}>
           {loading ? <p className="muted">Loading library…</p> : note ? (
-            <section className="note-placeholder">
-              <button className="subtle-button" type="button" onClick={() => setSelectedNote(null)}>← Back to notes</button>
-              <p className="eyebrow">NOTE</p>
-              <h1>{note.title}</h1>
-              <p className="muted">{pathFor(note.folderId, data.folders)}</p>
-              <div className="editor-coming">
-                <div className="coming-icon" aria-hidden="true">✎</div>
-                <h2>Your page starts here.</h2>
-                <p className="muted">Spatial pages arrive in Slice 2. Rich-text editing arrives in Slice 3. For now, you can organize and rename this note.</p>
-                <button className="secondary-button" type="button" onClick={() => begin('note', 'rename', note.id)}>Rename note</button>
-              </div>
-            </section>
+            <SpatialPages key={note.id} noteId={note.id} noteTitle={note.title}
+              onBack={() => setSelectedNote(null)} />
           ) : (
             <section>
               <div className="library-heading">

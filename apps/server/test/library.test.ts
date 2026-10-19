@@ -29,7 +29,7 @@ test('library: nested folders, notes, ordering, moves, deletion safety, persiste
   });
   try {
     await app.ready();
-    assert.equal((db.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get() as { count: number }).count, 2);
+    assert.equal((db.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get() as { count: number }).count, 3);
     assert.equal((await app.inject({ method: 'GET', url: '/api/library' })).statusCode, 401);
     assert.equal((await post('/api/folders', { name: 'Unauthorized' })).statusCode, 401);
     await createOwner(db, 'secure-test-password-987');
@@ -97,7 +97,7 @@ test('library: nested folders, notes, ordering, moves, deletion safety, persiste
     assert.equal(library.notes.find((n: { id: string }) => n.id === note1.id).folderId, sibling.id);
     assert.deepEqual(library.notes.filter((n: { folderId: string }) => n.folderId === sibling.id).map((n: { id: string }) => n.id), [note3.id, note1.id]);
     assert.deepEqual(library.folders.filter((f: { parentId: string }) => f.parentId === a.id).map((f: { id: string }) => f.id), [sibling.id, b.id]);
-    assert.equal((db.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get() as { count: number }).count, 2);
+    assert.equal((db.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get() as { count: number }).count, 3);
 
     assert.equal((await del('/api/notes/' + note2.id, cookie)).statusCode, 204);
     assert.equal((await del('/api/folders/' + d.id, cookie)).statusCode, 204);
