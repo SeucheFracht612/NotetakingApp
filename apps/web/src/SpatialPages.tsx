@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { spatialNavigationShortcut } from './spatial-shortcuts';
 import { PageEditor } from './PageEditor';
 import { FreeformCard,useFreeformCanvas,hasUnsavedFreeform,type CanvasKind } from './FreeformCanvas';
@@ -237,7 +237,7 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
     }catch{/* The canvas error is shown next to the toolbar. */}
   }
   const pan=useRef<{x:number;y:number;left:number;top:number;id:number}|null>(null);
-  function pointerDown(event:React.PointerEvent<HTMLDivElement>) {
+  function pointerDown(event:PointerEvent<HTMLDivElement>) {
     if(event.button!==0 && event.button!==1)return;
     const target=event.target as HTMLElement;
     if(event.button===0 && target.closest('.spatial-page,.freeform-card,.spatial-edge-action,button,textarea'))return;
@@ -247,13 +247,13 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
     viewport.setPointerCapture(event.pointerId);
     event.preventDefault();
   }
-  function pointerMove(event:React.PointerEvent<HTMLDivElement>) {
+  function pointerMove(event:PointerEvent<HTMLDivElement>) {
     const p=pan.current,viewport=scrollRef.current;
     if(!p||!viewport||p.id!==event.pointerId)return;
     viewport.scrollLeft=p.left+p.x-event.clientX;
     viewport.scrollTop=p.top+p.y-event.clientY;
   }
-  function pointerUp(event:React.PointerEvent<HTMLDivElement>) {
+  function pointerUp(event:PointerEvent<HTMLDivElement>) {
     if(!pan.current||pan.current.id!==event.pointerId)return;
     const viewport=scrollRef.current;
     if(viewport?.hasPointerCapture(event.pointerId))viewport.releasePointerCapture(event.pointerId);

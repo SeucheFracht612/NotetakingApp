@@ -177,7 +177,7 @@ export function FreeformCard({noteId,item,zoom,selected,onSelect,onUpdate,onDele
     if(event.button!==0)return;
     event.preventDefault();event.stopPropagation();onSelect(item.id);
     const handle=event.currentTarget;
-    const card=handle.closest('.freeform-card') as HTMLElement|null;
+    const card=handle.closest('.freeform-position') as HTMLElement|null;
     if(!card)return;
     const x=event.clientX,y=event.clientY;
     const startX=item.x,startY=item.y;
@@ -216,7 +216,7 @@ export function FreeformCard({noteId,item,zoom,selected,onSelect,onUpdate,onDele
     if(event.button!==0)return;
     event.preventDefault();event.stopPropagation();onSelect(item.id);
     const handle=event.currentTarget;
-    const card=handle.closest('.freeform-card') as HTMLElement|null;
+    const card=handle.closest('.freeform-position') as HTMLElement|null;
     if(!card)return;
     const startX=event.clientX,startY=event.clientY;
     handle.setPointerCapture(event.pointerId);
