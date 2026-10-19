@@ -121,7 +121,7 @@ Sign in and select a note in the sidebar. Click **Create first page** if that no
 - Use **Detach** to intentionally remove an attachment while retaining both pages and coordinates. Insertion operations never silently detach existing connections.
 - A connected B-side group shifts one cell when inserting between A and B. If that shift hits independent groups, the planner pushes each group rigidly in the same direction. If any pinned/anchored page would need to move, the whole insertion is rejected transactionally. Inserting into a cycle is rejected because A and B remain connected by another path.
 - A leaf page can be deleted after confirmation. Pages with two or more attachments cannot be deleted in this slice.
-- For attached-only navigation use the visible Go controls or **Meta/Super + Arrow** in the focused canvas. On Linux desktops where the window manager consumes Super/Meta key combinations, use **Ctrl + Shift + Arrow** as a fallback.
+- For attached-only navigation use the visible Go controls or **Ctrl + Arrow** while the spatial view is focused. The app no longer uses Super/Meta + Arrow, because Linux window managers commonly reserve those combinations for window movement or resizing.
 - Scroll the canvas to pan, or use zoom and Center page. The overview lets you select any page.
 - The database records the complete layout under a per-note revision. If another tab changes the layout before you confirm, the server returns HTTP 409 and the UI reloads the newer version instead of overwriting it.
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { spatialNavigationShortcut } from './spatial-shortcuts';
 
 type Direction = 'N' | 'E' | 'S' | 'W';
 const DIRECTIONS: Direction[] = ['N','E','S','W'];
@@ -50,6 +51,8 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
   const [zoom,setZoom]=useState(0.82);
   const [preview,setPreview]=useState<Preview|null>(null);
   const scrollRef=useRef<HTMLDivElement>(null);
+  const shellRef=useRef<HTMLElement>(null);
+  useEffect(()=>{shellRef.current?.focus({preventScroll:true});},[noteId]);
   const selectedPage=layout.pages.find(page=>page.id===selectedId)??layout.pages[0]??null;
   const displayOrder=useMemo(()=>[...layout.pages].sort((a,b)=>a.createdAt-b.createdAt||a.id.localeCompare(b.id)),[layout.pages]);
   const pageNumbers=useMemo(()=>new Map(displayOrder.map((p,index)=>[p.id,index+1])),[displayOrder]);
@@ -113,9 +116,8 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
   function keyboard(event:KeyboardEvent<HTMLDivElement>){
     if(event.target instanceof HTMLElement &&
       (['INPUT','TEXTAREA','SELECT'].includes(event.target.tagName) || event.target.isContentEditable))return;
-    const map:Record<string,Direction>={ArrowUp:'N',ArrowRight:'E',ArrowDown:'S',ArrowLeft:'W'};
-    const side=map[event.key];
-    if(side && (event.metaKey || (event.ctrlKey && event.shiftKey))) {
+    const side=spatialNavigationShortcut(event);
+    if(side) {
       event.preventDefault();
       navigate(side);
     }
@@ -189,7 +191,8 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
   const degree=selectedPage?layout.edges.filter(e=>e.fromPageId===selectedPage.id||e.toPageId===selectedPage.id).length:0;
 
   return (
-    <section className="spatial-shell" onKeyDown={keyboard} tabIndex={-1}>
+    <section className="spatial-shell" ref={shellRef} onKeyDown={keyboard}
+      tabIndex={0} aria-label="Spatial note pages">
       <header className="spatial-topbar">
         <div className="spatial-heading">
           <button type="button" className="spatial-back" onClick={onBack}>← Notes</button>
@@ -291,7 +294,7 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
               <button type="button" className="spatial-delete" disabled={working||degree>1}
                 title={degree>1?'Detach or remove other connections first':'Delete this blank page'}
                 onClick={()=>{void deletePage();}}>Delete {degree>1?'(not a leaf)':'page'}</button>
-              <small><strong>Shortcut:</strong> Super/Meta + arrow. Fallback: Ctrl + Shift + arrow (focus the page canvas first).</small>
+              <small><strong>Shortcut:</strong> Ctrl + Arrow to follow attached pages. Works while the spatial view is focused.</small>
             </div>
             <div className="spatial-minimap-wrap">
               <p className="eyebrow">OVERVIEW</p>
