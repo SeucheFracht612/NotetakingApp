@@ -3,7 +3,7 @@ import type { AppDatabase } from './db.js';
 import { LibraryError } from './library.js';
 import { EMPTY_DOCUMENT, validateDocument, type RichDoc } from './document-schema.js';
 
-const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 interface PageParams { noteId: string; pageId: string }
 interface DocumentResult { noteId: string; pageId: string; revision: number; doc: RichDoc; updatedAt: number | null }
 
