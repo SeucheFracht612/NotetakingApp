@@ -12,16 +12,12 @@ const note = (id: string, title: string, folderId: string, sortKey = 0) =>
 test('sidebar folders with only notes expand and render their notes in order', () => {
   const folders = [folder('a', 'History', null), folder('b', 'Lectures', 'a')];
   const notes = [note('n2', 'Second lecture', 'b', 1), note('n1', 'First lecture', 'b', 0)];
+  const noop = () => undefined;
   const props = {
     parentId: null, depth: 0, folders, notes,
     selectedId: 'b', selectedNoteId: 'n1',
-    onSelect: (_id: string) => undefined,
-    onSelectNote: (_entry: typeof notes[number]) => undefined,
-    onToggle: (_id: string) => undefined,
-    onMenu: (_kind: 'note' | 'folder', _action: 'create' | 'rename' | 'move', _id: string) => undefined,
-    onDelete: (_kind: 'note' | 'folder', _id: string) => undefined,
-    onStep: (_kind: 'note' | 'folder', _id: string, _direction: -1 | 1) => undefined,
-    onDropFolder: (_source: string, _destination: string | null) => undefined
+    onSelect: noop, onSelectNote: noop, onToggle: noop,
+    onMenu: noop, onDelete: noop, onStep: noop, onDropFolder: noop
   };
 
   const closed = renderToStaticMarkup(React.createElement(FolderTree, { ...props, expanded: new Set(['a']) }));
@@ -39,7 +35,8 @@ test('sidebar folders with only notes expand and render their notes in order', (
   const moved = renderToStaticMarkup(React.createElement(FolderTree, {
     ...props,
     notes: notes.map(entry => entry.id === 'n1' ? { ...entry, folderId: 'a' } : entry),
-    expanded: new Set(['a','b'])
+    expanded: new Set(['a'])
   }));
-  assert.ok(moved.indexOf('First lecture') < moved.indexOf('Lectures'));
+  assert.match(moved, /First lecture/);
+  assert.doesNotMatch(moved, /Second lecture/);
 });
