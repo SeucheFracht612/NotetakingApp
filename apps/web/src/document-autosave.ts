@@ -30,8 +30,8 @@ export async function documentRequest(method: 'GET' | 'PUT', url: string, payloa
 }
 
 function readCache(key: string): {revision:number;doc:JsonDoc}|null {
-  let raw:string|null = null;
-  try { raw=sessionStorage.getItem(key); } catch { raw=memCache.get(key)??null; }
+  let raw:string|null;
+  try { raw=sessionStorage.getItem(key)??memCache.get(key)??null; } catch { raw=memCache.get(key)??null; }
   if (!raw) return null;
   try {
     const parsed=JSON.parse(raw) as {revision:number;doc:JsonDoc};
