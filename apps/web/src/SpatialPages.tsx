@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { spatialNavigationShortcut } from './spatial-shortcuts';
 import { PageEditor } from './PageEditor';
-import { flushDrafts, hasUnsavedDrafts } from './document-autosave';
+import { flushDrafts, hasUnsavedDrafts, forgetDeletedPageDraft } from './document-autosave';
 
 type Direction = 'N' | 'E' | 'S' | 'W';
 const DIRECTIONS: Direction[] = ['N','E','S','W'];
@@ -134,8 +134,8 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
       navigate(side);
     }
   }
-  async function change(action:()=>Promise<Layout>,highlightNew=false){
-    if(working)return;
+  async function change(action:()=>Promise<Layout>,highlightNew=false):Promise<Layout|null>{
+    if(working)return null;
     setWorking(true);setError('');
     try {
       const oldIds=new Set(layout.pages.map(page=>page.id));
@@ -148,10 +148,12 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
         setSelectedId(current=>result.pages.some(page=>page.id===current)?current:result.pages[0]?.id??null);
       }
       setPreview(null);
+      return result;
     } catch(cause) {
       setError(cause instanceof Error?cause.message:'Could not change page layout');
       try {await refresh();} catch { /* The initial error is more useful. */ }
       setPreview(null);
+      return null;
     } finally {setWorking(false);}
   }
   const base='/api/notes/'+noteId+'/pages';
@@ -194,7 +196,9 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
   async function deletePage(){
     if(!selectedPage)return;
     if(!window.confirm('Permanently delete this page AND ALL text written on it? This cannot be undone.'))return;
-    await change(()=>json<Layout>(base+'/'+selectedPage.id,'DELETE',{expectedVersion:layout.version}));
+    const deletedId=selectedPage.id;
+    const result=await change(()=>json<Layout>(base+'/'+deletedId,'DELETE',{expectedVersion:layout.version}));
+    if(result)forgetDeletedPageDraft(noteId,deletedId);
   }
 
   const miniUnit=22,miniGap=4;

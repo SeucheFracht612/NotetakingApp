@@ -137,6 +137,12 @@ export class PageDraft {
     });
     return this.saving;
   }
+  /** Called only after confirmed page deletion. No draft should survive a deleted page. */
+  forget() {
+    if(this.timer){clearTimeout(this.timer);this.timer=null;}
+    clearCache(this.key);
+    this.set({status:'saved',error:''});
+  }
   /** Explicit user action: throw away the recovered draft after confirmation. */
   async discardDraft():Promise<void>{
     if(this.timer){clearTimeout(this.timer);this.timer=null;}
@@ -154,3 +160,9 @@ export function getDraft(noteId:string,pageId:string):PageDraft {
 }
 export function hasUnsavedDrafts():boolean {return [...drafts.values()].some(d=>d.hasPending);}
 export function flushDrafts() {for(const draft of drafts.values())void draft.save();}
+
+export function forgetDeletedPageDraft(noteId:string,pageId:string) {
+  const key=noteId+':'+pageId;
+  const draft=drafts.get(key);
+  if(draft){draft.forget();drafts.delete(key);}
+}
