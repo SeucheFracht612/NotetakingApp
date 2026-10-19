@@ -2,17 +2,29 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { spatialNavigationShortcut } from '../../web/src/spatial-shortcuts.js';
 
-test('spatial navigation uses Ctrl+Arrow without requiring Shift', () => {
-  for (const [key, direction] of [
+function keyEvent(key: string, altGraph: boolean, metaKey = false) {
+  return {key, metaKey, getModifierState: (modifier: string) => modifier === 'AltGraph' && altGraph};
+}
+
+test('AltGr + arrows navigate all four attached directions', () => {
+  for(const [key, side] of [
     ['ArrowUp', 'N'], ['ArrowRight', 'E'], ['ArrowDown', 'S'], ['ArrowLeft', 'W']
   ] as const) {
-    assert.equal(spatialNavigationShortcut({key,ctrlKey:true,metaKey:false,altKey:false}),direction);
-    assert.equal(spatialNavigationShortcut({key,ctrlKey:true,metaKey:true,altKey:false}),null);
-    assert.equal(spatialNavigationShortcut({key,ctrlKey:false,metaKey:true,altKey:false}),null);
-    assert.equal(spatialNavigationShortcut({key,ctrlKey:false,metaKey:false,altKey:false}),null);
-    assert.equal(spatialNavigationShortcut({key,ctrlKey:true,metaKey:false,altKey:true}),null);
+    assert.equal(spatialNavigationShortcut(keyEvent(key,true)),side);
+    assert.equal(spatialNavigationShortcut(keyEvent(key,false)),null);
+    assert.equal(spatialNavigationShortcut(keyEvent(key,true,true)),null);
   }
-  assert.equal(spatialNavigationShortcut({
-    key:'Enter',ctrlKey:true,metaKey:false,altKey:false
-  }),null);
+});
+
+test('Ctrl, Super, regular Alt, and unrelated AltGr key presses do not navigate', () => {
+  const modifiedKey = {
+    key:'ArrowRight',
+    ctrlKey:true,
+    altKey:true,
+    metaKey:false,
+    getModifierState: (modifier:string) => modifier === 'never-present'
+  };
+  assert.equal(spatialNavigationShortcut(modifiedKey),null);
+  assert.equal(spatialNavigationShortcut(keyEvent('Enter',true)),null);
+  assert.equal(spatialNavigationShortcut(keyEvent('a',true)),null);
 });

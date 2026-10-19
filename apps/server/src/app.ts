@@ -22,7 +22,7 @@ export async function buildApp({ db, config, serveWeb = false, logger = false }:
     logger: logger ? {
       redact: ['req.headers.cookie', 'req.headers.authorization', 'req.body.password', 'res.headers.set-cookie']
     } : false,
-    bodyLimit: 4096,
+    bodyLimit: 131072,
     trustProxy: false
   });
 

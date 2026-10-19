@@ -71,6 +71,18 @@ const pageMigration = [
   ');'
 ].join('\n');
 
+const documentMigration = [
+  'CREATE TABLE page_documents (',
+  '  note_id TEXT NOT NULL,',
+  '  page_id TEXT NOT NULL,',
+  '  revision INTEGER NOT NULL DEFAULT 0 CHECK (revision >= 0),',
+  '  document_json TEXT NOT NULL,',
+  '  updated_at INTEGER NOT NULL,',
+  '  PRIMARY KEY (note_id, page_id),',
+  '  FOREIGN KEY (note_id, page_id) REFERENCES note_pages(note_id, id) ON DELETE CASCADE',
+  ');'
+].join('\n');
+
 export function openDatabase(filename: string): AppDatabase {
   fs.mkdirSync(path.dirname(filename), { recursive: true });
   const db = new Database(filename);
@@ -83,7 +95,7 @@ export function openDatabase(filename: string): AppDatabase {
 
 export function migrate(db: AppDatabase): void {
   db.exec('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)');
-  const migrations = [{ version: 1, sql: initialMigration }, { version: 2, sql: libraryMigration }, { version: 3, sql: pageMigration }];
+  const migrations = [{ version: 1, sql: initialMigration }, { version: 2, sql: libraryMigration }, { version: 3, sql: pageMigration }, { version: 4, sql: documentMigration }];
   for (const migration of migrations) {
     db.transaction(() => {
       const existing = db.prepare('SELECT 1 FROM schema_migrations WHERE version = ?').get(migration.version);
