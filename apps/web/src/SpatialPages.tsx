@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { spatialNavigationShortcut } from './spatial-shortcuts';
+import { PageEditor } from './PageEditor';
+import { flushDrafts, hasUnsavedDrafts } from './document-autosave';
 
 type Direction = 'N' | 'E' | 'S' | 'W';
 const DIRECTIONS: Direction[] = ['N','E','S','W'];
@@ -53,6 +55,16 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
   const scrollRef=useRef<HTMLDivElement>(null);
   const shellRef=useRef<HTMLElement>(null);
   useEffect(()=>{shellRef.current?.focus({preventScroll:true});},[noteId]);
+  useEffect(()=>{
+    const warn=(event:BeforeUnloadEvent)=>{
+      if(!hasUnsavedDrafts())return;
+      event.preventDefault(); event.returnValue='';
+    };
+    const flush=()=>flushDrafts();
+    window.addEventListener('beforeunload',warn);
+    window.addEventListener('pagehide',flush);
+    return ()=>{window.removeEventListener('beforeunload',warn);window.removeEventListener('pagehide',flush);flush();};
+  },[]);
   const selectedPage=layout.pages.find(page=>page.id===selectedId)??layout.pages[0]??null;
   const displayOrder=useMemo(()=>[...layout.pages].sort((a,b)=>a.createdAt-b.createdAt||a.id.localeCompare(b.id)),[layout.pages]);
   const pageNumbers=useMemo(()=>new Map(displayOrder.map((p,index)=>[p.id,index+1])),[displayOrder]);
@@ -86,7 +98,7 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
     };
   },[layout.pages]);
 
-  const cellW=240*zoom,cellH=327*zoom,pageW=210*zoom,pageH=297*zoom,pad=94*zoom;
+  const cellW=730*zoom,cellH=1000*zoom,pageW=650*zoom,pageH=920*zoom,pad=100*zoom;
   const canvasWidth=(bounds.maxX-bounds.minX)*cellW+pageW+pad*2;
   const canvasHeight=(bounds.maxY-bounds.minY)*cellH+pageH+pad*2;
   const position=(page:{gx:number;gy:number})=>({
@@ -181,7 +193,7 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
   }
   async function deletePage(){
     if(!selectedPage)return;
-    if(!window.confirm('Delete this blank page? This cannot be undone.'))return;
+    if(!window.confirm('Permanently delete this page AND ALL text written on it? This cannot be undone.'))return;
     await change(()=>json<Layout>(base+'/'+selectedPage.id,'DELETE',{expectedVersion:layout.version}));
   }
 
@@ -239,22 +251,27 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
                 const active=page.id===selectedPage?.id;
                 const p=position(page);
                 return (
-                  <button type="button" key={page.id}
+                  <div key={page.id} role={active?'group':'button'}
+                    tabIndex={active?-1:0}
+                    onKeyDown={event=>{
+                      if(!active&&(event.key==='Enter'||event.key===' ')) {
+                        event.preventDefault();selectPage(page.id);
+                      }
+                    }}
                     className={'spatial-page'+(active?' is-selected':'')}
                     style={{left:p.x,top:p.y,width:pageW,height:pageH}}
-                    onClick={()=>selectPage(page.id)}
-                    aria-current={active?'page':undefined}
-                    aria-label={'Select page '+pageNumbers.get(page.id)+' at '+page.gx+', '+page.gy}>
+                    onClick={()=>{if(!active)selectPage(page.id);}}
+                    aria-label={'Page '+pageNumbers.get(page.id)+' at '+page.gx+', '+page.gy}>
                     <span className="spatial-page-top">
                       <span>PAGE {pageNumbers.get(page.id)}</span><span>A4</span>
                     </span>
-                    <span className="spatial-page-sheet">
-                      <span className="spatial-page-line"/>
-                      <span className="spatial-page-line short"/>
-                      <span className="spatial-page-guide">Content editor coming in Slice 3</span>
-                    </span>
+                    <div className="spatial-page-sheet">
+                      {active
+                        ? <PageEditor noteId={noteId} pageId={page.id} zoom={zoom}/>
+                        : <div className="page-inactive-preview">Select to read or edit this page</div>}
+                    </div>
                     <span className="spatial-page-footer">{page.gx}, {page.gy}</span>
-                  </button>
+                  </div>
                 );
               })}
             </div>

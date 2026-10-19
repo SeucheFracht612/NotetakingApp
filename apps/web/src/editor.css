@@ -1,0 +1,43 @@
+
+/* Slice 3: editable A4 writing surfaces. */
+.spatial-page { cursor: default; }
+.spatial-page:focus-visible { outline: 3px solid #74a68a; outline-offset: 3px; }
+.spatial-page-sheet { min-height: 0; padding: 4% 6%; gap: 5px; overflow: hidden; }
+.spatial-page-top { padding: 2.4% 6% 0; }
+.spatial-page-footer { padding: 0 6% 2%; }
+.page-editor-loading, .page-inactive-preview { display: grid; place-items: center; width: 100%; flex: 1; color: #829488; font-size: clamp(10px,.9vw,13px); text-align: center; }
+.page-format-toolbar { flex: none; display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: 5px; padding-bottom: 5px; border-bottom: 1px solid #e0e9e0; }
+.page-format-button { border: 1px solid #dae6da; background: #f8fbf8; color: #46664e; border-radius: 4px; font-size: clamp(9px,.75vw,11px); font-weight: 650; min-height: 23px; min-width: 25px; padding: 3px 5px; }
+.page-format-button:hover:not(:disabled) { background: #e9f3e9; }
+.page-format-button:disabled { opacity: .4; }
+.page-editor-viewport { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; background: #fff; line-height: 1.55; text-align: left; }
+.page-rich-content, .page-rich-content .tiptap { width: 100%; min-height: 100%; }
+.page-rich-content .tiptap { outline: none; padding: 4px 1px; cursor: text; overflow-wrap: anywhere; white-space: pre-wrap; }
+.page-rich-content p { margin: 0 0 .6em; }
+.page-rich-content h1 { font-size: 1.85em; line-height: 1.2; margin: .5em 0; }
+.page-rich-content h2 { font-size: 1.45em; line-height: 1.25; margin: .5em 0; }
+.page-rich-content h3 { font-size: 1.2em; line-height: 1.3; margin: .5em 0; }
+.page-rich-content ul, .page-rich-content ol { padding-left: 1.7em; margin: .6em 0; }
+.page-rich-content li { margin: .2em 0; }
+.page-rich-content li p { margin-bottom: .2em; }
+.page-rich-content blockquote { border-left: 3px solid #96baa1; padding-left: .8em; color: #536e59; margin: .5em 0; }
+.page-rich-content pre { white-space: pre-wrap; font-family: ui-monospace,monospace; font-size: .85em; background: #eef4ee; padding: .7em; }
+.page-rich-content hr { border: 0; border-top: 1px solid #9fb4a2; margin: 1em 0; }
+.page-rich-content code { font-family: ui-monospace,monospace; background: #eff4ed; font-size: .85em; }
+.page-editor-footer { flex: none; min-height: 23px; display: flex; justify-content: space-between; align-items: center; gap: 5px; flex-wrap: wrap; padding-top: 4px; font-size: clamp(8px,.7vw,10px); }
+.page-save-status { color: #5c785d; }
+.page-save-status.save-unsaved, .page-save-status.save-saving { color: #9b7a3f; }
+.page-save-status.save-conflict, .page-save-status.save-offline, .page-overflow-warning { color: #bd5949; }
+.page-save-problem { flex: none; max-height: 100px; overflow: auto; font-size: 10px; padding: 5px; background: #fff0ed; color: #a8463e; border-radius: 5px; }
+.page-save-problem small { display: block; font-size: 10px; }
+.page-recovery-actions { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 5px; }
+.page-recovery-actions button { font-size: 10px; padding: 5px; min-height: 27px; border: 1px solid #c89d94; background: #fff; border-radius: 5px; color: #803c32; }
+@media (prefers-color-scheme:dark) {
+  .page-editor-viewport { background: #26382c; color: #e7eee8; }
+  .page-format-toolbar { border-color: #49624d; }
+  .page-format-button { background: #33503b; color: #cbe4cf; border-color: #4e7056; }
+  .page-format-button:hover:not(:disabled) { background: #406347; }
+  .page-rich-content pre,.page-rich-content code { background: #36513b; }
+  .page-rich-content blockquote { color: #bfd6c1; }
+  .page-save-problem { background: #4c2f29; color: #fac1b7; }
+}
