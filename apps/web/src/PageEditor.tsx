@@ -4,6 +4,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { getDraft, type JsonDoc, type PageDraft } from './document-autosave';
 
 interface Props { noteId: string; pageId: string; zoom: number }
+type TiptapContent = Parameters<NonNullable<ReturnType<typeof useEditor>>['commands']['setContent']>[0];
 function Tool({label,action,disabled=false}: {label:string;action():void;disabled?:boolean}) {
   return <button type="button" className="page-format-button" title={label}
     disabled={disabled} onMouseDown={event=>event.preventDefault()} onClick={action}>{label}</button>;
@@ -15,7 +16,7 @@ function EditablePage({ manager,zoom }: {manager:PageDraft;zoom:number}) {
   const viewportRef=useRef<HTMLDivElement>(null);
   const editor=useEditor({
     extensions:[StarterKit.configure({link:false,heading:{levels:[1,2,3]},trailingNode:false})],
-    content:snapshot.doc,
+    content:snapshot.doc as unknown as TiptapContent,
     immediatelyRender:false,
     editorProps:{attributes:{'aria-label':'Page writing area',spellcheck:'true'}},
     onUpdate:({editor:instance})=>{manager.edit(instance.getJSON() as JsonDoc);}
@@ -23,7 +24,7 @@ function EditablePage({ manager,zoom }: {manager:PageDraft;zoom:number}) {
   useEffect(()=>{
     if(!editor)return;
     if(JSON.stringify(editor.getJSON())!==JSON.stringify(snapshot.doc)) {
-      editor.commands.setContent(snapshot.doc,{emitUpdate:false});
+      editor.commands.setContent(snapshot.doc as unknown as TiptapContent,{emitUpdate:false});
     }
   },[editor,snapshot.doc]);
 
