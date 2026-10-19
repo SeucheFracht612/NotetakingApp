@@ -2,7 +2,7 @@
 
 A personal, self-hostable research and lecture-note workspace. One owner per installation; **no public registration, shared hosted service, or preconfigured credentials**.
 
-> **Status:** Slice 0 and Slice 1 are merged into main. **Slice 2 spatial pages** is under review in [PR #6](https://github.com/SeucheFracht612/NotetakingApp/pull/6) on branch `feat/slice-2-spatial-pages`. Rich-text editing, images, and PDF/ink are **not** implemented yet.
+> **Status:** Slices 0–2 are merged into main. **Slice 3 rich-text editing** is in [PR #8](https://github.com/SeucheFracht612/NotetakingApp/pull/8) on branch `feat/slice-3-rich-text`. Images, PDF/ink, and automated text pagination are **not** implemented.
 
 ## Requirements
 
@@ -144,3 +144,38 @@ These endpoints live under \`/api/notes/:noteId/pages\` and require the logged-i
 Directions are \`N\`, \`E\`, \`S\`, or \`W\`. Pages and edges have UUID IDs scoped to a note. A wrong layout version or impossible insertion returns HTTP 409; malformed requests return HTTP 400, missing notes return 404, and missing owner sessions return 401.
 
 The graph solver is pure and tested independently of SQLite. Its invariant checks require unique coordinates, signed bounds, at most one attachment per side, and exactly adjacent endpoints.
+
+
+## Test Slice 3: rich-text editing (feature branch)
+
+Stop your dev server, then from an existing clone:
+
+    git fetch origin
+    git switch feat/slice-3-rich-text
+    npm ci
+    npm run dev
+
+Use your existing owner account; migrations are additive. Open a note from the sidebar and create a page if needed. **Click a page to select it; the selected page becomes editable.** Use the formatting toolbar for bold/italic/underline/strike, headings (H1–H3), bullet/numbered lists, quotes, code, rules, undo and redo. Content is stored as semantic TipTap/ProseMirror JSON, never as arbitrary HTML.
+
+**Autosave:** editing starts a ~1-second debounce. Wait for **Saved** (green) before assuming the server accepted your edits. **Saving** means a request is in progress; **Unsaved** indicates pending work. Failed/offline saves leave the draft in browser session storage, with a **Retry save** option; a 409 conflict explicitly says your draft was kept and offers **Copy draft**. **Discard draft & reload** permanently discards your local version and should only be used intentionally. Closing the browser tab with pending edits triggers an unsaved-work warning where supported.
+
+Text is bound to its **own page**, independently of the spatial attachment graph. Inserting/moving adjacent pages never moves their writing. Page document revisions are independent of note-layout revisions. A4 content that runs beyond its writing area shows an overflow warning and remains scrollable/editable **inside that page**. No automatic page continuation or text splitting is performed.
+
+### Rich document API
+
+Authenticated owner API (same-origin mutations):
+
+- \`GET /api/notes/:noteId/pages/:pageId/document\` returns \`{ noteId, pageId, revision, doc, updatedAt }\`. New pages expose a revision-0 empty document without an insert.
+- \`PUT /api/notes/:noteId/pages/:pageId/document\` accepts \`{ expectedRevision: 0, doc: { type: "doc", content: [...] } }\`. Success increments the content revision; stale revision returns **409 without changing data**. Invalid content, arbitrary HTML nodes/marks, or oversized documents return **400**.
+- Documents are scoped by note/page UUIDs and deleted with their pages by SQLite foreign keys. No upload URLs or HTML tags are accepted.
+
+### Slice 3 manual acceptance checklist
+
+1. Type paragraphs, headings, bold/italic, nested lists and quotations. Refresh and confirm the content remains.
+2. Switch between pages during typing. Return and confirm the pending work is still there; check the **Saved** indicator.
+3. Open the same page in two Firefox tabs, edit one, then the other. The stale tab must report a conflict and must not overwrite the first edit.
+4. Stop the backend, type more text, and check the offline warning; reconnect and use Retry save.
+5. Fill more than one A4 page: overflow should be warned about, not clipped or silently moved to another page.
+6. Check a tablet-sized Firefox viewport. In the text editor Ctrl+Arrow moves within text normally; when focus is outside the editor it navigates **attached pages**.
+
+**Not included:** image/PDF attachment, inking, cross-page flowing paragraphs, merging conflicting drafts, collaboration, or remote deployment. A successful CI run does not replace the manual checks above.
