@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Workspace } from './Workspace';
 
 interface Owner {
   id: number;
@@ -91,25 +92,5 @@ export function App() {
     );
   }
 
-  return (
-    <div className="workspace">
-      <aside className="sidebar">
-        <div className="sidebar-title"><span className="mark small" aria-hidden="true">N</span><strong>NotetakingApp</strong></div>
-        <div className="sidebar-section"><p className="eyebrow">LIBRARY</p><p className="sidebar-empty">Folders and notes will appear here in Slice 1.</p></div>
-        <div className="sidebar-bottom"><span className="user-indicator">Signed in as {owner.username}</span>
-          <button type="button" className="text-button" onClick={() => { void onLogout(); }}>Sign out</button>
-        </div>
-      </aside>
-      <main className="workspace-main">
-        <header className="workspace-toolbar"><span>Workspace</span><span className="stage-label">FOUNDATION</span></header>
-        <section className="empty-state">
-          <div className="empty-icon" aria-hidden="true">✎</div>
-          <p className="eyebrow">A PLACE TO THINK</p>
-          <h1>Make space for your ideas.</h1>
-          <p className="muted">The foundation is ready. Folders, notes, and the spatial page editor are coming in the next slices.</p>
-        </section>
-        {error && <p className="toast-error" role="alert">{error}</p>}
-      </main>
-    </div>
-  );
+  return <Workspace owner={owner} onLogout={() => { void onLogout(); }} authError={error} />;
 }
