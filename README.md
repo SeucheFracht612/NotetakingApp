@@ -2,7 +2,7 @@
 
 A personal, self-hostable research and lecture-note workspace. One owner per installation; **no public registration, shared hosted service, or preconfigured credentials**.
 
-> **Status:** Slices 0–2 are merged into main. **Slice 3 rich-text editing** is in [PR #8](https://github.com/SeucheFracht612/NotetakingApp/pull/8) on branch `feat/slice-3-rich-text`. Images, PDF/ink, and automated text pagination are **not** implemented.
+> **Status:** Slices 0–3 are merged into main. **Slice 4 — unified canvas and freeform objects** is under review in [PR #10](https://github.com/SeucheFracht612/NotetakingApp/pull/10) on branch `feat/slice-4-unified-canvas`. Image uploads, inking, diagram drawing, PDF embedding and auto-pagination are not yet implemented.
 
 ## Requirements
 
@@ -179,3 +179,51 @@ Authenticated owner API (same-origin mutations):
 6. Check a tablet-sized Firefox viewport. Ctrl + Arrow moves within text normally, and **AltGr + Arrow** navigates attached pages even while writing.
 
 **Not included:** image/PDF attachment, inking, cross-page flowing paragraphs, merging conflicting drafts, collaboration, or remote deployment. A successful CI run does not replace the manual checks above.
+
+
+## Slice 4: unified A4 + freeform canvas
+
+Try locally:
+
+    git fetch origin
+    git switch feat/slice-4-unified-canvas
+    npm ci
+    npm run dev
+
+Existing owner, folder, note, spatial layout, and page contents are preserved by **additive migration 5**. As usual, back up a valuable database before testing development branches.
+
+### Everyday workflow
+
+- Open any note. Its **A4 pages and movable cards inhabit the same scrollable canvas**; there is no separate canvas mode. The library sidebar can be collapsed using the top-left button.
+- The **formatting toolbar is outside the A4 sheet**. The selected page is editable and its confirmed save status appears in the heading. Other pages show compact previews of actual saved text, fetched via one authenticated request rather than mounting an editor for each page.
+- Use **+ Sticky**, **+ Text**, or **+ Quote** for freely positioned, overlapping cards. New objects initially appear near the current page. Drag a card by its header, resize it from its bottom-right handle, and type inside its text area. This slice stores **plain text** in cards, with a 6000-character bound.
+- Use the contextual **+** buttons beside a selected page edge to append/insert A4 sheets. Empty insertions happen directly; when existing page groups must shift, the prior preview and confirmation are still required. Nearby unlinked A4 pages show an explicit attachment action (↔).
+- Open **Page actions** for the detailed directional actions (navigate, attach, detach, delete) and **Overview** for the page map. Neither occupies the writing area by default.
+- Pan via trackpad/scroll or drag the **empty canvas background**. Use zoom controls or Center page to focus the selected A4 page. **AltGr + Arrow** continues to follow explicit page attachments; Ctrl + Arrow remains for text cursor navigation.
+- Card edits are debounced and saved separately from A4 content. A saved status only appears after an API acknowledgement; if a card cannot be saved, its text remains as a browser-session draft with Retry/Copy controls. Two tabs changing the same card get a revision conflict and **do not overwrite each other**. Freeform cards are independent of page movement.
+
+The design follows the minimal grayscale UI reference (near-black in system dark mode with restrained accent, and a light equivalent) across the login, library, workspace, dialogs and canvas.
+
+### Freeform canvas API
+
+Routes are owner-only and enforce the existing same-origin protections:
+
+- \`GET /api/notes/:noteId/canvas\` returns \`{noteId,version,items}\`.
+- \`POST /api/notes/:noteId/canvas/items\` takes \`{kind,x,y,width,height,content?,expectedVersion}\` to create an item (sticky/text/quote). Note-wide version prevents stale creation.
+- \`PATCH /api/notes/:noteId/canvas/items/:itemId\` takes \`{expectedRevision,x?,y?,width?,height?,content?}\`; each successful change increments **that item's** revision.
+- \`DELETE /api/notes/:noteId/canvas/items/:itemId\` takes \`{expectedRevision}\`.
+- \`GET /api/notes/:noteId/page-previews\` returns short, plain-text excerpts of the note's A4 page contents for efficient canvas viewing.
+
+Coordinates and dimensions are bounded integer world units, but **not snapped to the A4 grid**. A card may overlap a page. Card state is scoped per note; deleting the note cascades the objects. No HTML content is inserted or rendered by the API.
+
+### Slice 4 acceptance checklist (Firefox and tablet)
+
+1. In an existing note, add all three types of cards, write text, move and resize them, refresh the browser, and check positions and content.
+2. Add two cards close together and intentionally overlap them. Confirm the page attachments and page insertion mechanics still work; freeform cards should stay in place during page insertion.
+3. Open another note. Its canvas items should be independent. Confirm page previews display saved document text.
+4. Try Ctrl + Arrow while editing, AltGr + Arrow for attached-page navigation, zoom, empty-background drag to pan, library collapse and reopen, and tablet screen sizing.
+5. Add an A4 page to a note started with only freeform cards. Try both a simple page addition (no confirmation) and an insertion requiring displacement (confirmation).
+6. Test card autosave and conflict recovery: edit the same card from two browser tabs, then verify a stale update is rejected without silently losing the local text.
+7. Check both system light and dark themes, mobile folder navigation, formatting toolbar and status display.
+
+**Not included yet:** image/PDF uploads, ink/handwriting, drawing/diagrams, true freeform connectors, multiple-selection/group dragging, rich text inside freeform cards or automatic cross-page text flow. No VPS deployment performed. PR #10 stays draft pending manual acceptance.
