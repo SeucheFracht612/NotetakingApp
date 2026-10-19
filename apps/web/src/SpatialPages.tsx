@@ -148,7 +148,16 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
     if(selectedPage?.id)centerPage(selectedPage.id,'instant');
   },[centerPage,selectedPage?.id]);
 
-  function selectPage(id:string){setSelectedId(id);setPreview(null);}
+  useEffect(()=>{
+    if(!selectedItemId)return;
+    const frame=requestAnimationFrame(()=>{
+      const card=[...(scrollRef.current?.querySelectorAll<HTMLElement>('.freeform-position')??[])]
+        .find(node=>node.dataset.canvasId===selectedItemId);
+      card?.scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'});
+    });
+    return ()=>cancelAnimationFrame(frame);
+  },[selectedItemId,freeform.items.length]);
+  function selectPage(id:string){setSelectedItemId(null);setSelectedId(id);setPreview(null);}
   function navigate(side:Direction){
     if(!selectedPage)return;
     const to=attachedNeighbor(selectedPage.id,side,layout.edges);
@@ -241,8 +250,9 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
 
   async function addCard(kind:CanvasKind) {
     // Create near the current writing area, outside the page's right margin.
-    const x=(selectedPage?.gx??0)*730+675;
-    const y=(selectedPage?.gy??0)*1000+90;
+    const jitter=(freeform.items.length%5)*36;
+    const x=(selectedPage?.gx??0)*730+675+jitter;
+    const y=(selectedPage?.gy??0)*1000+90+jitter;
     try{
       const item=await freeform.create(kind,x,y);
       setSelectedItemId(item.id);
@@ -303,6 +313,7 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
       <div className="spatial-actionbar">
         <div className="spatial-format-slot" id="spatial-format-slot" aria-label="Document formatting"/>
         <div className="spatial-add-items" aria-label="Add objects">
+          {!layout.pages.length && <button type="button" title="Add the first A4 document page" onClick={()=>{void firstPage();}}>＋ A4 page</button>}
           <button type="button" title="Add a movable sticky note" onClick={()=>{void addCard('sticky');}}>＋ Sticky</button>
           <button type="button" title="Add movable plain text" onClick={()=>{void addCard('text');}}>＋ Text</button>
           <button type="button" title="Add a movable quotation" onClick={()=>{void addCard('quote');}}>＋ Quote</button>
@@ -372,7 +383,7 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
               })}
               {freeform.items.map(item=>{
                 const p=itemPosition(item);
-                return <div key={item.id} className="freeform-position"
+                return <div key={item.id} className="freeform-position" data-canvas-id={item.id}
                   style={{left:p.x,top:p.y,width:item.width*zoom,height:item.height*zoom,
                     fontSize:Math.max(12,14*zoom)}}>
                   <FreeformCard noteId={noteId} item={item} zoom={zoom}
