@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
+import { createPortal } from 'react-dom';
 import StarterKit from '@tiptap/starter-kit';
 import { getDraft, type JsonDoc, type PageDraft } from './document-autosave';
 
@@ -60,8 +61,9 @@ function EditablePage({ manager,zoom }: {manager:PageDraft;zoom:number}) {
     </div>
   );
   const classes='page-save-status save-'+snapshot.status;
+  const target=document.getElementById('spatial-format-slot');
   return <>
-    {toolbar}
+    {toolbar && target ? createPortal(toolbar,target) : null}
     <div className="page-editor-viewport" ref={viewportRef} style={{fontSize:Math.max(9,15*zoom)}}>
       <EditorContent editor={editor} className="page-rich-content" />
     </div>

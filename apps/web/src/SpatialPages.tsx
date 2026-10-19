@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { spatialNavigationShortcut } from './spatial-shortcuts';
 import { PageEditor } from './PageEditor';
+import { FreeformCard,useFreeformCanvas,hasUnsavedFreeform,type CanvasKind } from './FreeformCanvas';
 import { flushDrafts, hasUnsavedDrafts, forgetDeletedPageDraft } from './document-autosave';
 
 type Direction = 'N' | 'E' | 'S' | 'W';
@@ -43,8 +44,9 @@ export interface SpatialPagesProps {
   noteId:string;
   noteTitle:string;
   onBack():void;
+  onToggleLibrary():void;
 }
-export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
+export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPagesProps) {
   const [layout,setLayout]=useState<Layout>(()=>emptyLayout(noteId));
   const [selectedId,setSelectedId]=useState<string|null>(null);
   const [loading,setLoading]=useState(true);
@@ -52,12 +54,16 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
   const [error,setError]=useState('');
   const [zoom,setZoom]=useState(0.82);
   const [preview,setPreview]=useState<Preview|null>(null);
+  const [showPageActions,setShowPageActions]=useState(false);
+  const [selectedItemId,setSelectedItemId]=useState<string|null>(null);
+  const [showOverview,setShowOverview]=useState(false);
+  const freeform=useFreeformCanvas(noteId);
   const scrollRef=useRef<HTMLDivElement>(null);
   const shellRef=useRef<HTMLElement>(null);
   useEffect(()=>{shellRef.current?.focus({preventScroll:true});},[noteId]);
   useEffect(()=>{
     const warn=(event:BeforeUnloadEvent)=>{
-      if(!hasUnsavedDrafts())return;
+      if(!hasUnsavedDrafts()&&!hasUnsavedFreeform())return;
       event.preventDefault(); event.returnValue='';
     };
     const flush=()=>flushDrafts();
@@ -98,23 +104,33 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
     };
   },[layout.pages]);
 
+  // Documents occupy a stable A4 grid; cards have independent world coordinates.
+  // Calculate view bounds from *both* so freeform items can be placed anywhere.
   const cellW=730*zoom,cellH=1000*zoom,pageW=650*zoom,pageH=920*zoom,pad=100*zoom;
-  const canvasWidth=(bounds.maxX-bounds.minX)*cellW+pageW+pad*2;
-  const canvasHeight=(bounds.maxY-bounds.minY)*cellH+pageH+pad*2;
+  const minWorldX=Math.min(bounds.minX*730,...freeform.items.map(item=>item.x));
+  const minWorldY=Math.min(bounds.minY*1000,...freeform.items.map(item=>item.y));
+  const maxWorldX=Math.max(bounds.maxX*730+650,...freeform.items.map(item=>item.x+item.width));
+  const maxWorldY=Math.max(bounds.maxY*1000+920,...freeform.items.map(item=>item.y+item.height));
+  const canvasWidth=(maxWorldX-minWorldX)*zoom+pad*2;
+  const canvasHeight=(maxWorldY-minWorldY)*zoom+pad*2;
   const position=(page:{gx:number;gy:number})=>({
-    x:pad+(page.gx-bounds.minX)*cellW,
-    y:pad+(page.gy-bounds.minY)*cellH
+    x:pad+(page.gx*730-minWorldX)*zoom,
+    y:pad+(page.gy*1000-minWorldY)*zoom
+  });
+  const itemPosition=(item:{x:number;y:number})=>({
+    x:pad+(item.x-minWorldX)*zoom,
+    y:pad+(item.y-minWorldY)*zoom
   });
 
   const centerPage=useCallback((pageId:string,behavior:ScrollBehavior='smooth')=>{
     const viewport=scrollRef.current;
     const page=layout.pages.find(value=>value.id===pageId);
     if(!viewport||!page)return;
-    const x=pad+(page.gx-bounds.minX)*cellW;
-    const y=pad+(page.gy-bounds.minY)*cellH;
+    const x=pad+(page.gx*730-minWorldX)*zoom;
+    const y=pad+(page.gy*1000-minWorldY)*zoom;
     viewport.scrollTo({left:Math.max(0,x+pageW/2-viewport.clientWidth/2),
       top:Math.max(0,y+pageH/2-viewport.clientHeight/2),behavior});
-  },[layout.pages,bounds.minX,bounds.minY,cellW,cellH,pageW,pageH,pad]);
+  },[layout.pages,minWorldX,minWorldY,zoom,pageW,pageH,pad]);
   useEffect(()=>{
     if(selectedPage?.id)centerPage(selectedPage.id,'instant');
   },[centerPage,selectedPage?.id]);
@@ -170,7 +186,13 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
       const result=await json<Preview>(base+'/preview','POST',{
         anchorId:selectedPage.id,direction:side,expectedVersion:layout.version
       });
-      setPreview(result);
+      if(result.plan.shifts.length===0){
+        await change(()=>json<Layout>(base+'/insert','POST',{
+          anchorId:result.plan.anchorPageId,direction:result.plan.direction,expectedVersion:result.version
+        }),true);
+      }else{
+        setPreview(result);
+      }
     }catch(cause){
       setError(cause instanceof Error?cause.message:'Cannot insert a page here');
       try{await refresh();}catch{/* The error is already shown. */}
@@ -204,6 +226,40 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
     if(result)forgetDeletedPageDraft(noteId,deletedId);
   }
 
+  async function addCard(kind:CanvasKind) {
+    // Create near the current writing area, outside the page's right margin.
+    const x=(selectedPage?.gx??0)*730+675;
+    const y=(selectedPage?.gy??0)*1000+90;
+    try{
+      const item=await freeform.create(kind,x,y);
+      setSelectedItemId(item.id);
+      setShowPageActions(false);
+    }catch{/* The canvas error is shown next to the toolbar. */}
+  }
+  const pan=useRef<{x:number;y:number;left:number;top:number;id:number}|null>(null);
+  function pointerDown(event:React.PointerEvent<HTMLDivElement>) {
+    if(event.button!==0 && event.button!==1)return;
+    const target=event.target as HTMLElement;
+    if(event.button===0 && target.closest('.spatial-page,.freeform-card,.spatial-edge-action,button,textarea'))return;
+    const viewport=scrollRef.current;
+    if(!viewport)return;
+    pan.current={x:event.clientX,y:event.clientY,left:viewport.scrollLeft,top:viewport.scrollTop,id:event.pointerId};
+    viewport.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+  function pointerMove(event:React.PointerEvent<HTMLDivElement>) {
+    const p=pan.current,viewport=scrollRef.current;
+    if(!p||!viewport||p.id!==event.pointerId)return;
+    viewport.scrollLeft=p.left+p.x-event.clientX;
+    viewport.scrollTop=p.top+p.y-event.clientY;
+  }
+  function pointerUp(event:React.PointerEvent<HTMLDivElement>) {
+    if(!pan.current||pan.current.id!==event.pointerId)return;
+    const viewport=scrollRef.current;
+    if(viewport?.hasPointerCapture(event.pointerId))viewport.releasePointerCapture(event.pointerId);
+    pan.current=null;
+  }
+
   const miniUnit=22,miniGap=4;
   const miniWidth=(bounds.maxX-bounds.minX+1)*(miniUnit+miniGap)+16;
   const miniHeight=(bounds.maxY-bounds.minY+1)*(miniUnit*1.414+miniGap)+16;
@@ -214,6 +270,7 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
       tabIndex={0} aria-label="Spatial note pages">
       <header className="spatial-topbar">
         <div className="spatial-heading">
+          <button type="button" className="spatial-library-toggle" title="Toggle library" aria-label="Toggle library" onClick={onToggleLibrary}>☷</button>
           <button type="button" className="spatial-back" onClick={onBack}>← Notes</button>
           <div className="spatial-heading-title"><strong>{noteTitle}</strong>
             <small>{layout.pages.length} {layout.pages.length===1?'page':'pages'} · layout v{layout.version}</small></div>
@@ -229,9 +286,23 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
       </header>
       {error && <div className="spatial-error" role="alert">{error}
         <button type="button" onClick={()=>setError('')} aria-label="Dismiss error">×</button></div>}
+      <div className="spatial-actionbar">
+        <div className="spatial-format-slot" id="spatial-format-slot" aria-label="Document formatting"/>
+        <div className="spatial-add-items" aria-label="Add objects">
+          <button type="button" title="Add a movable sticky note" onClick={()=>{void addCard('sticky');}}>＋ Sticky</button>
+          <button type="button" title="Add movable plain text" onClick={()=>{void addCard('text');}}>＋ Text</button>
+          <button type="button" title="Add a movable quotation" onClick={()=>{void addCard('quote');}}>＋ Quote</button>
+          <button type="button" className={showPageActions?'active':''} onClick={()=>setShowPageActions(v=>!v)}>Page actions</button>
+          <button type="button" className={showOverview?'active':''} onClick={()=>setShowOverview(v=>!v)}>Overview</button>
+        </div>
+      </div>
+      {freeform.error && <div role="alert" className="spatial-error">{freeform.error}
+        <button type="button" onClick={freeform.clearError}>×</button></div>}
       <div className="spatial-body">
-        <div className="spatial-canvas-viewport" ref={scrollRef}>
-          {loading ? <p className="spatial-center-message">Loading pages…</p> : !layout.pages.length ? (
+        <div className="spatial-canvas-viewport" ref={scrollRef}
+          onPointerDown={pointerDown} onPointerMove={pointerMove}
+          onPointerUp={pointerUp} onPointerCancel={pointerUp}>
+          {loading || freeform.loading ? <p className="spatial-center-message">Loading canvas…</p> : !layout.pages.length && !freeform.items.length ? (
             <div className="spatial-first-page">
               <div className="spatial-page-empty-icon" aria-hidden="true">▤</div>
               <h2>This note has no pages yet.</h2>
@@ -281,10 +352,49 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
                   </div>
                 );
               })}
+              {freeform.items.map(item=>{
+                const p=itemPosition(item);
+                return <div key={item.id} className="freeform-position"
+                  style={{left:p.x,top:p.y,width:item.width*zoom,height:item.height*zoom,
+                    fontSize:Math.max(12,14*zoom)}}>
+                  <FreeformCard noteId={noteId} item={item} zoom={zoom}
+                    selected={selectedItemId===item.id} onSelect={setSelectedItemId}
+                    onUpdate={freeform.update} onDelete={freeform.remove}/>
+                </div>;
+              })}
+              {selectedPage&&DIRECTIONS.map(side=>{
+                const link=attachedNeighbor(selectedPage.id,side,layout.edges);
+                const near=byCoord.get((selectedPage.gx+DELTA[side][0])+':'+(selectedPage.gy+DELTA[side][1]));
+                const center=position(selectedPage);
+                const placement=side==='N'?{left:center.x+pageW/2-18,top:center.y-43}:
+                  side==='S'?{left:center.x+pageW/2-18,top:center.y+pageH+8}:
+                  side==='E'?{left:center.x+pageW+8,top:center.y+pageH/2-18}:
+                  {left:center.x-43,top:center.y+pageH/2-18};
+                return <button type="button" key={side} className="spatial-edge-action"
+                  title={link?'Insert a page into this attachment':near?'Attach neighboring page':'Add an attached A4 page'}
+                  style={placement}
+                  onClick={()=>{
+                    if(near&&!link){void linkAdjacent(side,near.id);}
+                    else void showPreview(side);
+                  }}>{near&&!link?'↔':'＋'}</button>;
+              })}
             </div>
           )}
         </div>
-        {!loading && !!layout.pages.length &&
+        {showOverview && !!layout.pages.length && <div className="spatial-floating-overview">
+          <p className="eyebrow">PAGE OVERVIEW</p>
+          <div className="spatial-minimap-scroll"><div className="spatial-minimap"
+            style={{width:miniWidth,height:miniHeight}}>
+            {layout.pages.map(page=><button key={page.id} type="button"
+              className={'spatial-mini-page'+(page.id===selectedPage?.id?' active':'')}
+              aria-label={'Go to page '+pageNumbers.get(page.id)}
+              style={{left:8+(page.gx-bounds.minX)*(miniUnit+miniGap),
+                top:8+(page.gy-bounds.minY)*(miniUnit*1.414+miniGap),
+                width:miniUnit,height:miniUnit*1.414}}
+              onClick={()=>selectPage(page.id)}/>)}
+          </div></div>
+        </div>}
+        {showPageActions && !loading && !!layout.pages.length &&
           <aside className="spatial-inspector" aria-label="Page controls">
             <div className="spatial-inspector-head">
               <span className="eyebrow">CURRENT PAGE</span>
