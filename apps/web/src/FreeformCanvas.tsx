@@ -165,7 +165,6 @@ export function FreeformCard({noteId,item,zoom,selected,onSelect,onUpdate,onDele
     };
     // Only bind the lifetime of this card; never overwrite its local draft
     // when a parent state refresh arrives during editing.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   },[item.id]);
   function edit(text:string){
     if(text.length>6000)return;

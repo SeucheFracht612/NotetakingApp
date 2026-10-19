@@ -12,7 +12,7 @@ export interface CanvasItem {
   createdAt: number;
   updatedAt: number;
 }
-interface CanvasRow extends CanvasItem {}
+type CanvasRow = CanvasItem;
 export interface CanvasState { noteId: string; version: number; items: CanvasItem[] }
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function uuid(value: unknown): string {
