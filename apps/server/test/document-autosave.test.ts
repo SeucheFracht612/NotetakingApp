@@ -11,9 +11,10 @@ test('autosave serializes changes; never claims saved until acknowledgment',asyn
     if(method==='GET')return current;
     const sent=payload as {expectedRevision:number;doc:JsonDoc};
     assert.equal(sent.expectedRevision,current.revision);
+    if(sent.expectedRevision===1){current=response(2,doc('second'));return current;}
     return new Promise<ServerDocument>(resolve=>{resolveSave=resolve;});
   };
-  const manager=new PageDraft('test','a',transport,30000);
+  const manager=new PageDraft('test','a',transport,10);
   await manager.load();
   assert.equal(manager.getSnapshot().status,'saved');
   manager.edit(doc('first'));
@@ -38,7 +39,7 @@ test('revision conflicts preserve the edited document',async()=>{
     const error=new Error('Stale document') as Error&{status:number};
     error.status=409;throw error;
   };
-  const manager=new PageDraft('test','conflict',transport,30000);
+  const manager=new PageDraft('test','conflict',transport,10);
   await manager.load();
   manager.edit(doc('mine'));
   await manager.save();

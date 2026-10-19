@@ -45,7 +45,7 @@ test('page content schema: nested rich text accepted; untrusted nodes/attrs boun
 test('document API: independent revision, CAS conflict, auth, invalid payloads, deletion, restart', async()=>{
   const dir=mkdtempSync(path.join(os.tmpdir(),'notetaking-document-test-'));
   const filename=path.join(dir,'state.sqlite');
-  const config:AppConfig={appOrigin,databasePath:filename,host:'127.0.0.1',port:3000,isProduction:false};
+  const config:AppConfig={appOrigin:origin,databasePath:filename,host:'127.0.0.1',port:3000,isProduction:false};
   let db=openDatabase(filename),app=await buildApp({db,config});
   const request=(method:string,url:string,payload?:unknown,cookie?:string,from=origin)=>
     app.inject({method,url,headers:{...(method!=='GET'?{origin:from}:{}),...(cookie?{cookie}:{})},
