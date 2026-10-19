@@ -205,9 +205,9 @@ export function Workspace({ owner, onLogout, authError }: WorkspaceProps) {
   function begin(kind: Kind, action: Action, id?: string | null) {
     const currentFolder = id && kind === 'folder' ? byFolder.get(id) : undefined;
     const currentNote = id && kind === 'note' ? byNote.get(id) : undefined;
-    let initialDestination = '';
-    if (kind === 'folder') initialDestination = action === 'create' ? (id === null ? '' : (id ?? selectedFolder ?? '')) : (currentFolder?.parentId ?? '');
-    else initialDestination = action === 'create' ? (selectedFolder ?? availableFolders[0]?.id ?? '') : (currentNote?.folderId ?? '');
+    const initialDestination = kind === 'folder'
+      ? action === 'create' ? (id === null ? '' : (id ?? selectedFolder ?? '')) : (currentFolder?.parentId ?? '')
+      : action === 'create' ? (selectedFolder ?? availableFolders[0]?.id ?? '') : (currentNote?.folderId ?? '');
     setFieldValue(action === 'create' ? '' : (currentFolder?.name ?? currentNote?.title ?? ''));
     setDestination(initialDestination);
     setError('');

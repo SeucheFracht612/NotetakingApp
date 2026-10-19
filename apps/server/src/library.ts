@@ -37,6 +37,8 @@ function object(value: unknown, allowed: string[], required: string[] = []): Rec
 }
 
 function text(value: unknown, field: string, maximum: number): string {
+  // Reject ASCII control characters in user-visible titles.
+  // eslint-disable-next-line no-control-regex
   if (typeof value !== 'string' || /[\u0000-\u001f\u007f]/u.test(value) ||
       !value.trim() || value.trim().length > maximum) {
     throw new LibraryError(400, field + ' must be 1–' + maximum + ' characters, without control characters');
@@ -77,7 +79,6 @@ function ensureDestination(db: AppDatabase, destination: string | null): void {
 type Kind = 'folders' | 'notes';
 
 function siblingIds(db: AppDatabase, kind: Kind, parentId: string | null): string[] {
-  const key = kind === 'folders' ? 'parent_id' : 'folder_id';
   const sql = kind === 'folders'
     ? 'SELECT id FROM folders WHERE parent_id IS ? ORDER BY sort_key, created_at, id'
     : 'SELECT id FROM notes WHERE folder_id = ? ORDER BY sort_key, created_at, id';
