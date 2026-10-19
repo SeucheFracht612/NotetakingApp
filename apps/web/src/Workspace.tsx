@@ -211,7 +211,7 @@ export function Workspace({ owner, onLogout, authError }: WorkspaceProps) {
     setFieldValue(action === 'create' ? '' : (currentFolder?.name ?? currentNote?.title ?? ''));
     setDestination(initialDestination);
     setError('');
-    setModal({ kind, action, id });
+    setModal({ kind, action, id: id ?? undefined });
   }
   async function mutate<T>(path: string, method: string, payload?: unknown): Promise<T> {
     setWorking(true);
