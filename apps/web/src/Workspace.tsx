@@ -71,24 +71,28 @@ interface TreeProps {
   parentId: string | null;
   depth: number;
   folders: Folder[];
+  notes: Note[];
   selectedId: string | null;
+  selectedNoteId: string | null;
   expanded: Set<string>;
   onSelect(id: string): void;
+  onSelectNote(note: Note): void;
   onToggle(id: string): void;
   onMenu(kind: Kind, action: Action, id: string): void;
   onDelete(kind: Kind, id: string): void;
   onStep(kind: Kind, id: string, direction: -1 | 1): void;
   onDropFolder(sourceId: string, destinationId: string | null): void;
 }
-function FolderTree(props: TreeProps) {
+export function FolderTree(props: TreeProps) {
   const children = sorted(props.folders.filter(folder => folder.parentId === props.parentId));
   return (
     <>
       {children.map((folder, index) => {
-        const hasChildren = props.folders.some(child => child.parentId === folder.id);
+        const directNotes = sorted(props.notes.filter(note => note.folderId === folder.id));
+        const hasChildren = props.folders.some(child => child.parentId === folder.id) || directNotes.length > 0;
         return (
           <div key={folder.id} className="folder-branch">
-            <div className={'folder-line' + (props.selectedId === folder.id ? ' selected' : '')}
+            <div className={'folder-line' + (props.selectedId === folder.id && props.selectedNoteId === null ? ' selected' : '')}
               style={{ paddingLeft: Math.min(props.depth * 12 + 7, 127) }}
               draggable
               onDragStart={(event) => {
@@ -119,6 +123,7 @@ function FolderTree(props: TreeProps) {
                 <summary aria-label={'Actions for folder ' + folder.name} title="Folder actions">⋯</summary>
                 <div className="menu-options">
                   <button type="button" onClick={() => props.onMenu('folder', 'create', folder.id)}>New subfolder</button>
+                  <button type="button" onClick={() => props.onMenu('note', 'create', folder.id)}>New note</button>
                   <button type="button" onClick={() => props.onMenu('folder', 'rename', folder.id)}>Rename</button>
                   <button type="button" onClick={() => props.onMenu('folder', 'move', folder.id)}>Move to…</button>
                   <button type="button" disabled={index === 0} onClick={() => props.onStep('folder', folder.id, -1)}>Move up</button>
@@ -127,7 +132,37 @@ function FolderTree(props: TreeProps) {
                 </div>
               </details>
             </div>
-            {hasChildren && props.expanded.has(folder.id) && <FolderTree {...props} parentId={folder.id} depth={props.depth + 1} />}
+            {hasChildren && props.expanded.has(folder.id) && (
+              <>
+                <FolderTree {...props} parentId={folder.id} depth={props.depth + 1} />
+                {directNotes.map((entry, noteIndex) => (
+                  <div key={entry.id}
+                    className={'sidebar-note-line' + (props.selectedNoteId === entry.id ? ' selected-note' : '')}
+                    style={{ paddingLeft: Math.min((props.depth + 1) * 12 + 7, 139) }}>
+                    <button type="button" className="sidebar-note-select"
+                      title={entry.title}
+                      aria-current={props.selectedNoteId === entry.id ? 'page' : undefined}
+                      onClick={() => props.onSelectNote(entry)}>
+                      <span aria-hidden="true" className="sidebar-note-glyph">▤</span>
+                      <span className="folder-name">{entry.title}</span>
+                    </button>
+                    <details className="item-menu sidebar-note-menu">
+                      <summary aria-label={'Actions for note ' + entry.title} title="Note actions">⋯</summary>
+                      <div className="menu-options">
+                        <button type="button" onClick={() => props.onMenu('note', 'rename', entry.id)}>Rename</button>
+                        <button type="button" onClick={() => props.onMenu('note', 'move', entry.id)}>Move to…</button>
+                        <button type="button" disabled={noteIndex === 0}
+                          onClick={() => props.onStep('note', entry.id, -1)}>Move up</button>
+                        <button type="button" disabled={noteIndex === directNotes.length - 1}
+                          onClick={() => props.onStep('note', entry.id, 1)}>Move down</button>
+                        <button type="button" className="danger-text"
+                          onClick={() => props.onDelete('note', entry.id)}>Delete note</button>
+                      </div>
+                    </details>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         );
       })}
@@ -206,7 +241,7 @@ export function Workspace({ owner, onLogout, authError }: WorkspaceProps) {
     const currentNote = id && kind === 'note' ? byNote.get(id) : undefined;
     const initialDestination = kind === 'folder'
       ? action === 'create' ? (id === null ? '' : (id ?? selectedFolder ?? '')) : (currentFolder?.parentId ?? '')
-      : action === 'create' ? (selectedFolder ?? availableFolders[0]?.id ?? '') : (currentNote?.folderId ?? '');
+      : action === 'create' ? (id ?? selectedFolder ?? availableFolders[0]?.id ?? '') : (currentNote?.folderId ?? '');
     setFieldValue(action === 'create' ? '' : (currentFolder?.name ?? currentNote?.title ?? ''));
     setDestination(initialDestination);
     setError('');
@@ -311,7 +346,7 @@ export function Workspace({ owner, onLogout, authError }: WorkspaceProps) {
             <button type="button" className="icon-button" title="New top-level folder" aria-label="New top-level folder"
               onClick={() => begin('folder', 'create', null)}>＋</button>
           </div>
-          <button type="button" className={'root-item' + (selectedFolder === null ? ' active' : '')}
+          <button type="button" className={'root-item' + (selectedFolder === null && selectedNote === null ? ' active' : '')}
             onClick={() => selectFolder(null)}>▦ <span>All notes</span><span className="count">{data.notes.length}</span></button>
           <div className="tree-region">
             <div className="tree-drop-root" onDragOver={event => event.preventDefault()}
@@ -320,8 +355,9 @@ export function Workspace({ owner, onLogout, authError }: WorkspaceProps) {
                 const source = event.dataTransfer.getData('text/plain');
                 if (source.startsWith('folder:')) void dropFolder(source.slice(7), null);
               }}>
-              <FolderTree parentId={null} depth={0} folders={data.folders} selectedId={selectedFolder}
-                expanded={expanded} onSelect={selectFolder}
+              <FolderTree parentId={null} depth={0} folders={data.folders} notes={data.notes}
+                selectedId={selectedFolder} selectedNoteId={selectedNote}
+                expanded={expanded} onSelect={selectFolder} onSelectNote={selectNote}
                 onToggle={id => setExpanded(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; })}
                 onMenu={begin} onDelete={(kind, id) => { void remove(kind, id); }}
                 onStep={(kind, id, direction) => { void moveStep(kind, id, direction); }}

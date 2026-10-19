@@ -119,3 +119,16 @@
   .library-dialog input, .library-dialog select { background: #19241d; border-color: #526355; color: #e7f1e8; }
   @media (max-width: 600px) { .library-sidebar.mobile-visible { background: #1d2720; border-color: #38453b; } }
 }
+
+/* Notes are real, selectable children of each expanded folder. */
+.sidebar-note-line { min-height: 40px; display: flex; align-items: center; gap: 2px; padding-right: 5px; border-radius: 9px; }
+.sidebar-note-select { flex: 1; min-width: 0; display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 0 3px 0 24px; border: 0; background: transparent; color: inherit; text-align: left; font-size: 13px; }
+.sidebar-note-select:hover { color: #295d42; }
+.sidebar-note-glyph { flex: none; color: #779287; font-size: 17px; }
+.sidebar-note-line.selected-note { background: #dfece2; color: #295d42; }
+.sidebar-note-line.selected-note .sidebar-note-glyph { color: #397756; }
+.sidebar-note-menu .menu-options { left: auto; right: 0; }
+@media (prefers-color-scheme: dark) {
+  .sidebar-note-line.selected-note { background: #2d4c38; color: #ceecd3; }
+  .sidebar-note-line.selected-note .sidebar-note-glyph, .sidebar-note-select:hover { color: #a7d3ae; }
+}
