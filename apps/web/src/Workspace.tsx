@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type DragEvent, type FormEvent } from 'react';
+import React, { useEffect, useMemo, useState, type DragEvent, type FormEvent } from 'react';
 
 export interface Owner {
   id: number;
@@ -188,7 +188,7 @@ export function Workspace({ owner, onLogout, authError }: WorkspaceProps) {
   const [destination, setDestination] = useState<string>('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const refresh = useCallback(async () => {
+  const refresh = React.useCallback(async () => {
     const result = await api<LibraryData>('/api/library');
     setData(result);
     return result;
