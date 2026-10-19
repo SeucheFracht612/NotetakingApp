@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --package-lock-only --ignore-scripts --save-exact --workspace @notetaking/web @tiptap/react@3.31.3 @tiptap/pm@3.31.3 @tiptap/starter-kit@3.31.3
+      - run: npm install --package-lock-only --ignore-scripts --save-exact --workspace @notetaking/web @tiptap/react@3.32.0 @tiptap/pm@3.32.0 @tiptap/starter-kit@3.32.0
       - run: npm audit --audit-level=high
       - name: Commit dependency manifest and lockfile
         run: |
