@@ -63,7 +63,7 @@ function EditablePage({ manager,zoom }: {manager:PageDraft;zoom:number}) {
   const classes='page-save-status save-'+snapshot.status;
   const target=document.getElementById('spatial-format-slot');
   const statusTarget=document.getElementById('spatial-save-slot');
-  const statusLabel=snapshot.status==='saved'?'✓ Saved':snapshot.status==='saving'?'Saving…':
+  const statusLabel=snapshot.status==='saved'?'✓ Page saved':snapshot.status==='saving'?'Saving…':
     snapshot.status==='conflict'?'⚠ Conflict — draft kept':
     snapshot.status==='offline'?'⚠ Save unavailable':
     snapshot.status==='loading'?'Loading…':'● Unsaved';

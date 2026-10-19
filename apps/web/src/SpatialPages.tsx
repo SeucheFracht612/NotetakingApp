@@ -388,7 +388,7 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
                     fontSize:Math.max(12,14*zoom)}}>
                   <FreeformCard noteId={noteId} item={item} zoom={zoom}
                     selected={selectedItemId===item.id} onSelect={setSelectedItemId}
-                    onUpdate={freeform.update} onDelete={freeform.remove}/>
+                    onUpdate={freeform.update} onDelete={freeform.remove} onRefresh={freeform.refresh}/>
                 </div>;
               })}
               {selectedPage&&DIRECTIONS.map(side=>{

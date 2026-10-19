@@ -73,6 +73,9 @@ export function useFreeformCanvas(noteId:string){
         items:current.current.items.map(entry=>entry.id===id?result.item:entry)});
       setError('');
       return result;
+    }).catch(cause=>{
+      setError(cause instanceof Error?cause.message:'Could not save this canvas item');
+      throw cause;
     });
     queues.current.set(id,next);
     void next.finally(()=>{if(queues.current.get(id)===next)queues.current.delete(id);}).catch(()=>{});
@@ -99,6 +102,7 @@ type CardProps={
   noteId:string;item:CanvasItem;zoom:number;selected:boolean;
   onSelect(id:string):void;onUpdate(id:string,change:Changes):Promise<ChangeResult>;
   onDelete(id:string):Promise<void>;
+  onRefresh():Promise<CanvasState>;
 };
 function readDraft(key:string):{content:string;revision:number}|null {
   try {
@@ -113,7 +117,7 @@ function putDraft(key:string,revision:number,content:string) {
   try{sessionStorage.setItem(key,JSON.stringify({revision,content}));}catch{/* in-memory local state remains */}
 }
 function eraseDraft(key:string){try{sessionStorage.removeItem(key);}catch{/* blocked */}}
-export function FreeformCard({noteId,item,zoom,selected,onSelect,onUpdate,onDelete}:CardProps){
+export function FreeformCard({noteId,item,zoom,selected,onSelect,onUpdate,onDelete,onRefresh}:CardProps){
   const cacheKey='freeform:'+noteId+':'+item.id;
   const [initial]=useState(()=>readDraft(cacheKey));
   const [content,setContent]=useState(initial?.content??item.content);
@@ -236,10 +240,18 @@ export function FreeformCard({noteId,item,zoom,selected,onSelect,onUpdate,onDele
     handle.addEventListener('pointermove',move);
     handle.addEventListener('pointerup',finish);
   }
-  function discard(){
-    if(!window.confirm('Discard your unsaved local text and load the last confirmed server version?'))return;
-    eraseDraft(cacheKey);latest.current=item.content;setContent(item.content);
-    statusRef.current='saved';setStatus('saved');setMessage('');
+  async function discard(){
+    if(!window.confirm('Discard your unsaved local text and load the latest confirmed server version?'))return;
+    try{
+      const result=await onRefresh();
+      const current=result.items.find(entry=>entry.id===item.id);
+      if(!current)throw new Error('This card was deleted in another tab');
+      eraseDraft(cacheKey);latest.current=current.content;setContent(current.content);
+      revisionRef.current=current.revision;
+      statusRef.current='saved';setStatus('saved');setMessage('');
+    }catch(cause){
+      setMessage(cause instanceof Error?cause.message:'Cannot reload card');
+    }
   }
   return <section className={'freeform-card freeform-'+item.kind+(selected?' selected':'')}
     data-item-id={item.id} aria-label={item.kind+' canvas card'} onPointerDown={()=>onSelect(item.id)}>
@@ -265,7 +277,7 @@ export function FreeformCard({noteId,item,zoom,selected,onSelect,onUpdate,onDele
       <small>{message||'Your local text is kept.'}</small>
       <button onClick={()=>{void navigator.clipboard.writeText(content).catch(()=>window.prompt('Copy text',content));}}>Copy text</button>
       {status==='error'?<button onClick={()=>{void save();}}>Retry</button>:
-        <button onClick={discard}>Discard local</button>}
+        <button onClick={()=>{void discard();}}>Discard local & reload</button>}
     </div>}
     <button type="button" className="freeform-resize" aria-label="Resize card" title="Drag to resize"
       onPointerDown={resize}>◢</button>
