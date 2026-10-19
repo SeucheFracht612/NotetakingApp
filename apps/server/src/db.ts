@@ -83,6 +83,28 @@ const documentMigration = [
   ');'
 ].join('\n');
 
+
+const canvasMigration = [
+  'CREATE TABLE canvas_states (',
+  '  note_id TEXT PRIMARY KEY REFERENCES notes(id) ON DELETE CASCADE,',
+  '  version INTEGER NOT NULL DEFAULT 0 CHECK(version >= 0)',
+  ');',
+  'CREATE TABLE canvas_items (',
+  '  id TEXT PRIMARY KEY,',
+  '  note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,',
+  "  kind TEXT NOT NULL CHECK(kind IN ('sticky','text','quote')),",
+  '  x INTEGER NOT NULL CHECK(x BETWEEN -200000 AND 200000),',
+  '  y INTEGER NOT NULL CHECK(y BETWEEN -200000 AND 200000),',
+  '  width INTEGER NOT NULL CHECK(width BETWEEN 120 AND 900),',
+  '  height INTEGER NOT NULL CHECK(height BETWEEN 90 AND 800),',
+  '  content TEXT NOT NULL CHECK(length(content) <= 6000),',
+  '  revision INTEGER NOT NULL DEFAULT 1 CHECK(revision >= 1),',
+  '  created_at INTEGER NOT NULL,',
+  '  updated_at INTEGER NOT NULL',
+  ');',
+  'CREATE INDEX canvas_items_note_idx ON canvas_items(note_id,created_at,id);'
+].join('\n');
+
 export function openDatabase(filename: string): AppDatabase {
   fs.mkdirSync(path.dirname(filename), { recursive: true });
   const db = new Database(filename);
@@ -95,7 +117,7 @@ export function openDatabase(filename: string): AppDatabase {
 
 export function migrate(db: AppDatabase): void {
   db.exec('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)');
-  const migrations = [{ version: 1, sql: initialMigration }, { version: 2, sql: libraryMigration }, { version: 3, sql: pageMigration }, { version: 4, sql: documentMigration }];
+  const migrations = [{ version: 1, sql: initialMigration }, { version: 2, sql: libraryMigration }, { version: 3, sql: pageMigration }, { version: 4, sql: documentMigration }, { version: 5, sql: canvasMigration }];
   for (const migration of migrations) {
     db.transaction(() => {
       const existing = db.prepare('SELECT 1 FROM schema_migrations WHERE version = ?').get(migration.version);
