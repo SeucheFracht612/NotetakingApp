@@ -168,6 +168,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 }
 @media (max-width:600px){
   .library-content-spatial {height:100dvh;}
+  .library-workspace.sidebar-collapsed .library-sidebar.mobile-visible {display:flex;}
   .library-workspace.sidebar-collapsed .library-sidebar.mobile-visible,
   .library-sidebar.mobile-visible {background:var(--ui-sidebar);border-color:var(--ui-border);}
   .spatial-actionbar {max-height:115px;}
