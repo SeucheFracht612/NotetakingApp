@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type FormEvent } from 'react';
-import './library.css';
 
 export interface Owner {
   id: number;

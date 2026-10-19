@@ -24,6 +24,7 @@
 .item-menu summary::-webkit-details-marker { display: none; }
 .item-menu summary:hover { background: #d6e2d6; }
 .menu-options { position: absolute; z-index: 20; left: calc(100% - 14px); top: 100%; min-width: 168px; background: #fff; border: 1px solid #dce4da; border-radius: 12px; box-shadow: 0 10px 30px #192d1b2c; padding: 5px; display: grid; gap: 2px; }
+.folder-line .menu-options { left: auto; right: 0; }
 .menu-options button { padding: 9px 11px; min-height: 36px; background: transparent; color: #2a3c31; text-align: left; border: 0; border-radius: 7px; font-size: 12px; }
 .menu-options button:hover:not(:disabled) { background: #eef3ed; }
 .menu-options button:disabled { opacity: .4; cursor: default; }
