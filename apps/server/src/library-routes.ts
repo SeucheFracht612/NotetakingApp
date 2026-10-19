@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppDatabase } from './db.js';
 import { registerPageRoutes } from './page-routes.js';
+import { registerDocumentRoutes } from './document-routes.js';
 import { ownerForToken, sessionFromCookie } from './auth.js';
 import {
   LibraryError, readLibrary, createFolder, updateFolder, deleteFolder,
@@ -24,6 +25,7 @@ export function registerLibraryRoutes(app: FastifyInstance, db: AppDatabase): vo
   });
 
   registerPageRoutes(app, db);
+  registerDocumentRoutes(app, db);
 
   app.get('/library', async (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
