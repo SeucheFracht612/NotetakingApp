@@ -387,7 +387,7 @@ export function Workspace({ owner, onLogout, authError }: WorkspaceProps) {
         {authError && <div className="library-error" role="alert">{authError}</div>}
         <div className={'library-content'+(note?' library-content-spatial':'')}>
           {loading ? <p className="muted">Loading library…</p> : note ? (
-            <SpatialPages noteId={note.id} noteTitle={note.title}
+            <SpatialPages key={note.id} noteId={note.id} noteTitle={note.title}
               onBack={() => setSelectedNote(null)} />
           ) : (
             <section>
