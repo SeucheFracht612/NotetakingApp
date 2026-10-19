@@ -121,7 +121,7 @@ Sign in and select a note in the sidebar. Click **Create first page** if that no
 - Use **Detach** to intentionally remove an attachment while retaining both pages and coordinates. Insertion operations never silently detach existing connections.
 - A connected B-side group shifts one cell when inserting between A and B. If that shift hits independent groups, the planner pushes each group rigidly in the same direction. If any pinned/anchored page would need to move, the whole insertion is rejected transactionally. Inserting into a cycle is rejected because A and B remain connected by another path.
 - A leaf page can be deleted after confirmation. Pages with two or more attachments cannot be deleted in this slice.
-- For attached-only navigation use the visible Go controls or **Ctrl + Arrow** while the spatial view is focused. The app no longer uses Super/Meta + Arrow, because Linux window managers commonly reserve those combinations for window movement or resizing.
+- For attached-only navigation use the visible Go controls or **AltGr + Arrow** on a German/Linux keyboard (right Alt, not ordinary Alt). Firefox on Linux reports this modifier as `AltGraph`. This also works while the text editor is focused; **Ctrl + Arrow** remains available for cursor/word movement and **Super + Arrow** remains available to the desktop window manager.
 - Scroll the canvas to pan, or use zoom and Center page. The overview lets you select any page.
 - The database records the complete layout under a per-note revision. If another tab changes the layout before you confirm, the server returns HTTP 409 and the UI reloads the newer version instead of overwriting it.
 
@@ -176,6 +176,6 @@ Authenticated owner API (same-origin mutations):
 3. Open the same page in two Firefox tabs, edit one, then the other. The stale tab must report a conflict and must not overwrite the first edit.
 4. Stop the backend, type more text, and check the offline warning; reconnect and use Retry save.
 5. Fill more than one A4 page: overflow should be warned about, not clipped or silently moved to another page.
-6. Check a tablet-sized Firefox viewport. In the text editor Ctrl+Arrow moves within text normally; when focus is outside the editor it navigates **attached pages**.
+6. Check a tablet-sized Firefox viewport. Ctrl + Arrow moves within text normally, and **AltGr + Arrow** navigates attached pages even while writing.
 
 **Not included:** image/PDF attachment, inking, cross-page flowing paragraphs, merging conflicting drafts, collaboration, or remote deployment. A successful CI run does not replace the manual checks above.

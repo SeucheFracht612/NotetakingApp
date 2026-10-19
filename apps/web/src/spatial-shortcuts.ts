@@ -1,11 +1,13 @@
-/** Page navigation shortcuts should not conflict with Linux window-manager Super + Arrow. */
+/** Navigate the spatial page graph using the physical AltGr modifier.
+ * Firefox on Linux exposes AltGr/ISO_Level3_Shift via getModifierState('AltGraph').
+ * Do not alias Ctrl+Alt: that would steal ordinary editor/browser shortcuts.
+ */
 export type SpatialDirection = 'N' | 'E' | 'S' | 'W';
 
-export function spatialNavigationShortcut(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey'>):
-  SpatialDirection | null {
-  // Ctrl+Arrow is the primary shortcut. Ctrl+Shift+Arrow remains compatible,
-  // but Super/Meta and Alt must never trigger navigation.
-  if (!event.ctrlKey || event.metaKey || event.altKey) return null;
+type SpatialKeyEvent = Pick<KeyboardEvent, 'key' | 'metaKey' | 'getModifierState'>;
+
+export function spatialNavigationShortcut(event: SpatialKeyEvent): SpatialDirection | null {
+  if (event.metaKey || !event.getModifierState('AltGraph')) return null;
   switch (event.key) {
     case 'ArrowUp': return 'N';
     case 'ArrowRight': return 'E';

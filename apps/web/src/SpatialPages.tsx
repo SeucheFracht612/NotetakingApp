@@ -126,11 +126,14 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
     if(to)selectPage(to);
   }
   function keyboard(event:KeyboardEvent<HTMLDivElement>){
-    if(event.target instanceof HTMLElement &&
-      (['INPUT','TEXTAREA','SELECT'].includes(event.target.tagName) || event.target.isContentEditable))return;
+    // Capture AltGr+Arrow before ProseMirror processes keydown, including when
+    // the caret is inside the editable page. Never intercept Ctrl+Arrow.
+    if(preview || (event.target instanceof HTMLElement &&
+      ['INPUT','TEXTAREA','SELECT'].includes(event.target.tagName))) return;
     const side=spatialNavigationShortcut(event);
     if(side) {
       event.preventDefault();
+      event.stopPropagation();
       navigate(side);
     }
   }
@@ -207,7 +210,7 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
   const degree=selectedPage?layout.edges.filter(e=>e.fromPageId===selectedPage.id||e.toPageId===selectedPage.id).length:0;
 
   return (
-    <section className="spatial-shell" ref={shellRef} onKeyDown={keyboard}
+    <section className="spatial-shell" ref={shellRef} onKeyDownCapture={keyboard}
       tabIndex={0} aria-label="Spatial note pages">
       <header className="spatial-topbar">
         <div className="spatial-heading">
@@ -315,7 +318,7 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
               <button type="button" className="spatial-delete" disabled={working||degree>1}
                 title={degree>1?'Detach or remove other connections first':'Delete this blank page'}
                 onClick={()=>{void deletePage();}}>Delete {degree>1?'(not a leaf)':'page'}</button>
-              <small><strong>Shortcut:</strong> Ctrl + Arrow to follow attached pages. Works while the spatial view is focused.</small>
+              <small><strong>Shortcut:</strong> AltGr + Arrow to follow attached pages, even while typing. Ctrl + Arrow remains for text navigation.</small>
             </div>
             <div className="spatial-minimap-wrap">
               <p className="eyebrow">OVERVIEW</p>
