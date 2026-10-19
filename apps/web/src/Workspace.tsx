@@ -202,11 +202,11 @@ export function Workspace({ owner, onLogout, authError }: WorkspaceProps) {
     setSidebarOpen(false);
     expandAncestors(item.folderId);
   }
-  function begin(kind: Kind, action: Action, id?: string) {
+  function begin(kind: Kind, action: Action, id?: string | null) {
     const currentFolder = id && kind === 'folder' ? byFolder.get(id) : undefined;
     const currentNote = id && kind === 'note' ? byNote.get(id) : undefined;
     let initialDestination = '';
-    if (kind === 'folder') initialDestination = action === 'create' ? (id ?? selectedFolder ?? '') : (currentFolder?.parentId ?? '');
+    if (kind === 'folder') initialDestination = action === 'create' ? (id === null ? '' : (id ?? selectedFolder ?? '')) : (currentFolder?.parentId ?? '');
     else initialDestination = action === 'create' ? (selectedFolder ?? availableFolders[0]?.id ?? '') : (currentNote?.folderId ?? '');
     setFieldValue(action === 'create' ? '' : (currentFolder?.name ?? currentNote?.title ?? ''));
     setDestination(initialDestination);
@@ -310,7 +310,7 @@ export function Workspace({ owner, onLogout, authError }: WorkspaceProps) {
         <div className="library-sidebar-body">
           <div className="library-sidebar-heading"><span className="eyebrow">YOUR LIBRARY</span>
             <button type="button" className="icon-button" title="New top-level folder" aria-label="New top-level folder"
-              onClick={() => { setSelectedFolder(null); begin('folder', 'create'); }}>＋</button>
+              onClick={() => begin('folder', 'create', null)}>＋</button>
           </div>
           <button type="button" className={'root-item' + (selectedFolder === null ? ' active' : '')}
             onClick={() => selectFolder(null)}>▦ <span>All notes</span><span className="count">{data.notes.length}</span></button>

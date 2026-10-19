@@ -72,7 +72,7 @@ test('library: nested folders, notes, ordering, moves, deletion safety, persiste
     assert.equal((await patch('/api/notes/' + note1.id, { folderId: sibling.id }, cookie)).statusCode, 200);
     assert.equal((await patch('/api/notes/' + note3.id, { beforeId: note1.id }, cookie)).statusCode, 200);
     assert.equal((await patch('/api/folders/' + sibling.id, { parentId: a.id }, cookie)).statusCode, 200);
-    assert.equal((await patch('/api/folders/' + b.id, { beforeId: sibling.id }, cookie)).statusCode, 400);
+    assert.equal((await patch('/api/folders/' + b.id, { beforeId: root.id }, cookie)).statusCode, 400);
     assert.equal((await patch('/api/folders/' + sibling.id, { beforeId: b.id }, cookie)).statusCode, 200);
     assert.equal((await patch('/api/folders/' + d.id, { name: 'Week 1 updated' }, cookie)).statusCode, 200);
 
