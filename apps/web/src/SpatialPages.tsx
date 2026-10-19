@@ -57,6 +57,7 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
   const [showPageActions,setShowPageActions]=useState(false);
   const [selectedItemId,setSelectedItemId]=useState<string|null>(null);
   const [showOverview,setShowOverview]=useState(false);
+  const [pagePreviews,setPagePreviews]=useState<Record<string,string>>({});
   const freeform=useFreeformCanvas(noteId);
   const scrollRef=useRef<HTMLDivElement>(null);
   const shellRef=useRef<HTMLElement>(null);
@@ -71,6 +72,18 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
     window.addEventListener('pagehide',flush);
     return ()=>{window.removeEventListener('beforeunload',warn);window.removeEventListener('pagehide',flush);flush();};
   },[]);
+  // Previews show the actual writing on non-selected pages, without mounting
+  // a separate ProseMirror instance for every page on the canvas.
+  useEffect(()=>{
+    let alive=true;
+    void fetch('/api/notes/'+noteId+'/page-previews',{credentials:'same-origin',cache:'no-store'})
+      .then(async response=>{
+        if(!response.ok)throw new Error('Preview request failed');
+        return response.json() as Promise<{previews:Record<string,string>}>;
+      }).then(result=>{if(alive)setPagePreviews(result.previews);})
+      .catch(()=>{});
+    return ()=>{alive=false;};
+  },[noteId,layout.pages.length,selectedId]);
   const selectedPage=layout.pages.find(page=>page.id===selectedId)??layout.pages[0]??null;
   const displayOrder=useMemo(()=>[...layout.pages].sort((a,b)=>a.createdAt-b.createdAt||a.id.localeCompare(b.id)),[layout.pages]);
   const pageNumbers=useMemo(()=>new Map(displayOrder.map((p,index)=>[p.id,index+1])),[displayOrder]);
@@ -276,6 +289,7 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
             <small>{layout.pages.length} {layout.pages.length===1?'page':'pages'} · layout v{layout.version}</small></div>
         </div>
         <div className="spatial-toolbar">
+          <div className="spatial-save-slot" id="spatial-save-slot" aria-live="polite"></div>
           <span className="spatial-label">Zoom</span>
           <button type="button" className="spatial-tool" aria-label="Zoom out" onClick={()=>setZoom(z=>Math.max(.38,Math.round((z-.1)*100)/100))}>−</button>
           <span className="spatial-zoom">{Math.round(zoom*100)}%</span>
@@ -346,7 +360,11 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
                     <div className="spatial-page-sheet">
                       {active
                         ? <PageEditor noteId={noteId} pageId={page.id} zoom={zoom}/>
-                        : <div className="page-inactive-preview">Select to read or edit this page</div>}
+                        : <div className="page-inactive-preview">
+                            {pagePreviews[page.id]
+                              ? <div className="page-preview-writing">{pagePreviews[page.id]}</div>
+                              : <span>Blank page · Select to write</span>}
+                          </div>}
                     </div>
                     <span className="spatial-page-footer">{page.gx}, {page.gy}</span>
                   </div>
