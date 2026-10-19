@@ -22,7 +22,7 @@ test('Ctrl, Super, regular Alt, and unrelated AltGr key presses do not navigate'
     ctrlKey:true,
     altKey:true,
     metaKey:false,
-    getModifierState: (_modifier:string) => false
+    getModifierState: (modifier:string) => modifier === 'never-present'
   };
   assert.equal(spatialNavigationShortcut(modifiedKey),null);
   assert.equal(spatialNavigationShortcut(keyEvent('Enter',true)),null);
