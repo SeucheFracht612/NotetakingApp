@@ -67,8 +67,8 @@ test('spatial API: migrations, revision checks, owner protection, link/unlink, r
     assert.equal(committed.json().pages.length,3);
     assert.equal(committed.json().edges.length,2);
     assert.equal((await request('POST',base+'/link',{fromPageId:A,toPageId:B,direction:'E',expectedVersion:3},cookie)).statusCode,409);
-    assert.equal((await request('DELETE',base+'/'+A,{expectedVersion:3},cookie)).statusCode,409);
     const middle=committed.json().pages.find((p:{id:string})=>p.id!==A&&p.id!==B).id as string;
+    assert.equal((await request('DELETE',base+'/'+middle,{expectedVersion:3},cookie)).statusCode,409);
     assert.equal((await request('DELETE',base+'/'+B,{expectedVersion:3},cookie)).statusCode,200);
     assert.equal((await request('POST',base+'/unlink',{fromPageId:A,direction:'E',expectedVersion:4},cookie)).statusCode,200);
     assert.equal((await request('POST',base+'/link',{fromPageId:A,toPageId:middle,direction:'E',expectedVersion:5},cookie)).statusCode,200);
