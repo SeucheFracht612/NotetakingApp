@@ -73,6 +73,20 @@ function translateGraphError(error: unknown): never {
   throw error;
 }
 
+/** A continuation edge is part of the document's own writing flow.
+    Manual page commands must not silently split or detach it. */
+function continuationPair(db:AppDatabase,noteId:string,fromId:string,toId:string):boolean {
+  const rows=db.prepare('SELECT page_id AS pageId, root_page_id AS rootId, ordinal FROM writing_flow_pages WHERE note_id=? AND page_id IN (?,?)')
+    .all(noteId,fromId,toId) as {pageId:string;rootId:string;ordinal:number}[];
+  if(rows.length!==2 || rows[0].rootId!==rows[1].rootId)return false;
+  return Math.abs(rows[0].ordinal-rows[1].ordinal)===1;
+}
+function preventSplitContinuation(db:AppDatabase,noteId:string,fromId:string,toId:string|null):void {
+  if(toId && continuationPair(db,noteId,fromId,toId)){
+    throw new LibraryError(409,'This edge belongs to an automatic writing continuation and cannot be detached manually');
+  }
+}
+
 export function initializeNotePage(db: AppDatabase, rawId: unknown, payload: unknown): PageLayout {
   const args = requireObject(payload, ['expectedVersion'], ['expectedVersion']);
   const expected = version(args.expectedVersion);
@@ -113,6 +127,8 @@ export function insertPage(db: AppDatabase, rawId: unknown, payload: unknown): P
     const layout = getPageLayout(db, noteId);
     checkVersion(layout, args.expected);
     if (layout.pages.length >= 2000) throw new LibraryError(409, 'Maximum page count reached');
+    preventSplitContinuation(db,noteId,args.anchorId,
+      sideNeighbor(args.anchorId,args.direction,layout.edges));
     const plan = checkedPlan(layout, args.anchorId, args.direction);
     const { dx, dy } = DELTA[args.direction];
 
@@ -167,6 +183,7 @@ export function detachPageEdge(db: AppDatabase, rawId: unknown, payload: unknown
     checkVersion(layout, expected);
     const neighbor = sideNeighbor(fromId, side, layout.edges);
     if (!neighbor) throw new LibraryError(409, 'No attachment exists on that side');
+    preventSplitContinuation(db,noteId,fromId,neighbor);
     const edge = layout.edges.find(item =>
       (item.fromPageId === fromId && item.toPageId === neighbor) ||
       (item.fromPageId === neighbor && item.toPageId === fromId));
@@ -185,6 +202,15 @@ export function deleteLeafPage(db: AppDatabase, rawNoteId: unknown,
     const layout = getPageLayout(db, noteId);
     checkVersion(layout, expected);
     if (!layout.pages.some(page => page.id === pageId)) throw new LibraryError(404, 'Page not found');
+    const flow=db.prepare('SELECT root_page_id AS rootId, ordinal FROM writing_flow_pages WHERE note_id=? AND page_id=?')
+      .get(noteId,pageId) as {rootId:string;ordinal:number}|undefined;
+    if(flow){
+      const count=(db.prepare('SELECT COUNT(*) AS count FROM writing_flow_pages WHERE note_id=? AND root_page_id=?')
+        .get(noteId,flow.rootId) as {count:number}).count;
+      if(flow.ordinal>0 || count>1){
+        throw new LibraryError(409,'Continuation pages belong to a writing flow and cannot be deleted independently');
+      }
+    }
     const degree = layout.edges.filter(edge => edge.fromPageId === pageId || edge.toPageId === pageId).length;
     if (degree > 1) throw new LibraryError(409, 'Only leaf pages can be deleted in Slice 2');
     db.prepare('DELETE FROM note_pages WHERE note_id = ? AND id = ?').run(noteId, pageId);
