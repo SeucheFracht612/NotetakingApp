@@ -110,6 +110,7 @@ function Surface({manager,PaginationPlus,rootPageId,noteId,pageIds,layoutVersion
     const key=String(layoutVersion)+':'+snapshot.revision+':'+pageIds.length+':'+pageCount;
     if(key===blockedKey)return;
     let active=true;
+    let forwarded=false;
     locked.current=true;
     const tail=pageIds[pageIds.length-1];
     const endpoint='/api/notes/'+noteId+'/pages/preview';
@@ -133,6 +134,7 @@ function Surface({manager,PaginationPlus,rootPageId,noteId,pageIds,layoutVersion
       }else{
         // Release the preview lock before starting the atomic append.
         locked.current=false;
+        forwarded=true;
         void appendContinuation(layoutVersion,snapshot.revision);
       }
     }).catch(cause=>{
@@ -140,7 +142,7 @@ function Surface({manager,PaginationPlus,rootPageId,noteId,pageIds,layoutVersion
         setError(cause instanceof Error?cause.message:'Cannot create continuation');
         setBlockedKey(key);
       }
-    }).finally(()=>{if(active)locked.current=false;});
+    }).finally(()=>{if(!forwarded)locked.current=false;});
     return()=>{active=false;};
   },[editor,snapshot.status,snapshot.revision,pageCount,pageIds.length,layoutVersion,
     noteId,rootPageId,pendingPreview,blockedKey,onContinuation]);
