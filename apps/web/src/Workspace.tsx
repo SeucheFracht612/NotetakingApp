@@ -177,6 +177,7 @@ interface WorkspaceProps {
   authError: string;
 }
 export function Workspace({ owner, onLogout, authError }: WorkspaceProps) {
+  const [sidebarCollapsed,setSidebarCollapsed]=useState(false);
   const [data, setData] = useState<LibraryData>({ folders: [], notes: [] });
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
@@ -335,7 +336,7 @@ export function Workspace({ owner, onLogout, authError }: WorkspaceProps) {
   });
 
   return (
-    <div className="workspace library-workspace">
+    <div className={'workspace library-workspace'+(sidebarCollapsed?' sidebar-collapsed':'')}>
       <aside className={'sidebar library-sidebar' + (sidebarOpen ? ' mobile-visible' : '')}>
         <div className="sidebar-title">
           <span className="mark small" aria-hidden="true">N</span>
@@ -388,7 +389,11 @@ export function Workspace({ owner, onLogout, authError }: WorkspaceProps) {
         <div className={'library-content'+(note?' library-content-spatial':'')}>
           {loading ? <p className="muted">Loading library…</p> : note ? (
             <SpatialPages key={note.id} noteId={note.id} noteTitle={note.title}
-              onBack={() => setSelectedNote(null)} />
+              onBack={() => setSelectedNote(null)}
+              onToggleLibrary={()=>{
+                if(window.matchMedia('(max-width: 600px)').matches)setSidebarOpen(true);
+                else setSidebarCollapsed(value=>!value);
+              }} />
           ) : (
             <section>
               <div className="library-heading">

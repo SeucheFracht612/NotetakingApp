@@ -25,6 +25,48 @@ function validateWrite(payload: unknown): { expectedRevision: number; doc: RichD
   return { expectedRevision:data.expectedRevision,doc:validateDocument(data.doc) };
 }
 export function registerDocumentRoutes(app: FastifyInstance, db: AppDatabase): void {
+
+  // A single compact request supports a useful zoomed-out overview without
+  // mounting hundreds of rich-text editors or issuing one request per page.
+  app.get<{ Params: { noteId: string } }>('/notes/:noteId/page-previews', async(request,reply)=>{
+    const noteId=request.params.noteId;
+    if(!uuid.test(noteId))throw new LibraryError(400,'Invalid note identifier');
+    if(!db.prepare('SELECT 1 FROM notes WHERE id=?').get(noteId))
+      throw new LibraryError(404,'Note not found');
+    const rows=db.prepare(`SELECT p.id, fp.ordinal,
+        CASE WHEN fp.ordinal=0 THEN f.document_json ELSE d.document_json END AS json
+      FROM note_pages p
+      LEFT JOIN writing_flow_pages fp ON fp.note_id=p.note_id AND fp.page_id=p.id
+      LEFT JOIN writing_flows f ON f.note_id=p.note_id AND f.root_page_id=fp.root_page_id
+      LEFT JOIN page_documents d ON d.note_id=p.note_id AND d.page_id=p.id
+      WHERE p.note_id=?`)
+      .all(noteId) as {id:string;ordinal:number|null;json:string|null}[];
+    const previews:Record<string,string>={};
+    for(const row of rows){
+      if(row.ordinal!==null && row.ordinal>0){previews[row.id]='Continued writing';continue;}
+      if(!row.json){previews[row.id]='';continue;}
+      const root=JSON.parse(row.json) as {type?:string;content?:unknown[]};
+      const chunks:string[]=[];
+      let length=0;
+      function walk(value:unknown){
+        if(length>=420 || !value || typeof value!=='object')return;
+        const n=value as {type?:string;text?:string;content?:unknown[]};
+        if(n.type==='text' && n.text){
+          const bit=n.text.slice(0,420-length);
+          chunks.push(bit);length+=bit.length;
+          return;
+        }
+        for(const child of n.content??[])walk(child);
+        if(['paragraph','heading','blockquote','listItem','codeBlock'].includes(n.type??'') && length<420){
+          chunks.push('\n');length++;
+        }
+      }
+      walk(root);
+      previews[row.id]=chunks.join('').trim().slice(0,420);
+    }
+    reply.header('Cache-Control','no-store');
+    return {noteId,previews};
+  });
   app.get<{ Params: PageParams }>('/notes/:noteId/pages/:pageId/document', async (request,reply) => {
     reply.header('Cache-Control','no-store');
     return readPageDocument(db,request.params);
@@ -32,6 +74,12 @@ export function registerDocumentRoutes(app: FastifyInstance, db: AppDatabase): v
   app.put<{ Params: PageParams }>('/notes/:noteId/pages/:pageId/document', async (request,reply) => {
     const {expectedRevision,doc}=validateWrite(request.body);
     const result = db.transaction(() => {
+      // A whole writing-flow document supersedes the legacy one-editor-per-
+      // page API. Reject stale old tabs instead of silently diverging data.
+      if(db.prepare('SELECT 1 FROM writing_flow_pages WHERE note_id=? AND page_id=?')
+        .get(request.params.noteId,request.params.pageId)) {
+        throw new LibraryError(409,'This page now belongs to a continuous writing flow. Reload the note; your old-tab draft was not overwritten');
+      }
       const current=readPageDocument(db,request.params);
       if (current.revision !== expectedRevision) {
         throw new LibraryError(409,'Page content changed in another tab; your local draft was not overwritten');

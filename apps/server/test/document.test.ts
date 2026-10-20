@@ -52,7 +52,7 @@ test('document API: independent revision, CAS conflict, auth, invalid payloads, 
       ...(payload===undefined?{}:{payload})});
   try {
     await app.ready();
-    assert.equal((db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get() as {n:number}).n,4);
+    assert.equal((db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get() as {n:number}).n,7);
     await createOwner(db,'very-long-password-for-docs');
     const login=await request('POST','/api/auth/login',{password:'very-long-password-for-docs'});
     const cookie=String(login.headers['set-cookie']).split(';')[0];
@@ -73,6 +73,12 @@ test('document API: independent revision, CAS conflict, auth, invalid payloads, 
     assert.equal(saved.statusCode,200,saved.body);
     assert.equal(saved.json().revision,1);
     assert.deepEqual(saved.json().doc,rich);
+    const previews=await request('GET','/api/notes/'+note+'/page-previews',undefined,cookie);
+    assert.equal(previews.statusCode,200,previews.body);
+    assert.match(previews.json().previews[page],/Primary sources/);
+    assert.match(previews.json().previews[page],/A bold detail/);
+    assert.doesNotMatch(previews.json().previews[page],/<script>/);
+    assert.equal((await request('GET','/api/notes/'+note+'/page-previews')).statusCode,401);
     assert.equal((await request('PUT',base,{expectedRevision:0,doc:EMPTY_DOCUMENT},cookie)).statusCode,409);
     assert.equal((await request('PUT',base,{expectedRevision:1,doc:{type:'doc',content:[
       {type:'paragraph',content:[{type:'text',text:'<script>alert(1)</script>',marks:[{type:'link'}]}]}

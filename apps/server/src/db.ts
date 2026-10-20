@@ -83,6 +83,62 @@ const documentMigration = [
   ');'
 ].join('\n');
 
+
+const canvasMigration = [
+  'CREATE TABLE canvas_states (',
+  '  note_id TEXT PRIMARY KEY REFERENCES notes(id) ON DELETE CASCADE,',
+  '  version INTEGER NOT NULL DEFAULT 0 CHECK(version >= 0)',
+  ');',
+  'CREATE TABLE canvas_items (',
+  '  id TEXT PRIMARY KEY,',
+  '  note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,',
+  "  kind TEXT NOT NULL CHECK(kind IN ('sticky','text','quote')),",
+  '  x INTEGER NOT NULL CHECK(x BETWEEN -200000 AND 200000),',
+  '  y INTEGER NOT NULL CHECK(y BETWEEN -200000 AND 200000),',
+  '  width INTEGER NOT NULL CHECK(width BETWEEN 120 AND 900),',
+  '  height INTEGER NOT NULL CHECK(height BETWEEN 90 AND 800),',
+  '  content TEXT NOT NULL CHECK(length(content) <= 6000),',
+  '  revision INTEGER NOT NULL DEFAULT 1 CHECK(revision >= 1),',
+  '  created_at INTEGER NOT NULL,',
+  '  updated_at INTEGER NOT NULL',
+  ');',
+  'CREATE INDEX canvas_items_note_idx ON canvas_items(note_id,created_at,id);'
+].join('\n');
+
+
+/* One canonical ProseMirror document per writing flow, initially one flow per
+   preexisting page. Continuations are member pages, not separate documents. */
+const writingFlowMigration = [
+  'CREATE TABLE writing_flows (',
+  '  note_id TEXT NOT NULL,',
+  '  root_page_id TEXT NOT NULL,',
+  '  revision INTEGER NOT NULL CHECK(revision >= 0),',
+  '  document_json TEXT NOT NULL,',
+  '  updated_at INTEGER NOT NULL,',
+  '  PRIMARY KEY(note_id,root_page_id),',
+  '  FOREIGN KEY(note_id,root_page_id) REFERENCES note_pages(note_id,id) ON DELETE CASCADE',
+  ');',
+  'CREATE TABLE writing_flow_pages (',
+  '  note_id TEXT NOT NULL,',
+  '  page_id TEXT NOT NULL,',
+  '  root_page_id TEXT NOT NULL,',
+  '  ordinal INTEGER NOT NULL CHECK(ordinal >= 0),',
+  '  PRIMARY KEY(note_id,page_id),',
+  '  UNIQUE(note_id,root_page_id,ordinal),',
+  '  FOREIGN KEY(note_id,page_id) REFERENCES note_pages(note_id,id) ON DELETE CASCADE,',
+  '  FOREIGN KEY(note_id,root_page_id) REFERENCES writing_flows(note_id,root_page_id) ON DELETE CASCADE',
+  ');',
+  'CREATE INDEX writing_flow_members_idx ON writing_flow_pages(note_id,root_page_id,ordinal);',
+  "INSERT INTO writing_flows(note_id,root_page_id,revision,document_json,updated_at) SELECT p.note_id,p.id,COALESCE(d.revision,0),COALESCE(d.document_json,'{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\"}]}'),COALESCE(d.updated_at,p.created_at) FROM note_pages p LEFT JOIN page_documents d ON d.note_id=p.note_id AND d.page_id=p.id;",
+  'INSERT INTO writing_flow_pages(note_id,page_id,root_page_id,ordinal) SELECT note_id,id,id,0 FROM note_pages;'
+].join('\n');
+
+
+const quotationMigration = [
+  "ALTER TABLE canvas_items ADD COLUMN source TEXT NOT NULL DEFAULT '' CHECK(length(source) <= 350);",
+  "ALTER TABLE canvas_items ADD COLUMN locator TEXT NOT NULL DEFAULT '' CHECK(length(locator) <= 80);"
+].join('\n');
+
 export function openDatabase(filename: string): AppDatabase {
   fs.mkdirSync(path.dirname(filename), { recursive: true });
   const db = new Database(filename);
@@ -95,7 +151,7 @@ export function openDatabase(filename: string): AppDatabase {
 
 export function migrate(db: AppDatabase): void {
   db.exec('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)');
-  const migrations = [{ version: 1, sql: initialMigration }, { version: 2, sql: libraryMigration }, { version: 3, sql: pageMigration }, { version: 4, sql: documentMigration }];
+  const migrations = [{ version: 1, sql: initialMigration }, { version: 2, sql: libraryMigration }, { version: 3, sql: pageMigration }, { version: 4, sql: documentMigration }, { version: 5, sql: canvasMigration }, { version: 6, sql: writingFlowMigration }, { version: 7, sql: quotationMigration }];
   for (const migration of migrations) {
     db.transaction(() => {
       const existing = db.prepare('SELECT 1 FROM schema_migrations WHERE version = ?').get(migration.version);

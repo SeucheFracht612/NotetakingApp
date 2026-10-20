@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { spatialNavigationShortcut } from './spatial-shortcuts';
-import { PageEditor } from './PageEditor';
+import { FlowWritingLayer,type ContinuationResult } from './FlowWritingLayer';
+import { FreeformCard,useFreeformCanvas,hasUnsavedFreeform,type CanvasKind } from './FreeformCanvas';
 import { flushDrafts, hasUnsavedDrafts, forgetDeletedPageDraft } from './document-autosave';
 
 type Direction = 'N' | 'E' | 'S' | 'W';
@@ -43,27 +44,72 @@ export interface SpatialPagesProps {
   noteId:string;
   noteTitle:string;
   onBack():void;
+  onToggleLibrary():void;
 }
-export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
+export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPagesProps) {
   const [layout,setLayout]=useState<Layout>(()=>emptyLayout(noteId));
   const [selectedId,setSelectedId]=useState<string|null>(null);
   const [loading,setLoading]=useState(true);
   const [working,setWorking]=useState(false);
   const [error,setError]=useState('');
-  const [zoom,setZoom]=useState(0.82);
+  const [zoom,setZoom]=useState(0.94);
   const [preview,setPreview]=useState<Preview|null>(null);
+  const [showPageActions,setShowPageActions]=useState(false);
+  const [selectedItemId,setSelectedItemId]=useState<string|null>(null);
+  const [showOverview,setShowOverview]=useState(false);
+  const [pagePreviews,setPagePreviews]=useState<Record<string,string>>({});
+  const [activeFlow,setActiveFlow]=useState<{rootPageId:string;pageIds:string[]}|null>(null);
+  const [flowError,setFlowError]=useState('');
+  const freeform=useFreeformCanvas(noteId);
   const scrollRef=useRef<HTMLDivElement>(null);
   const shellRef=useRef<HTMLElement>(null);
   useEffect(()=>{shellRef.current?.focus({preventScroll:true});},[noteId]);
   useEffect(()=>{
     const warn=(event:BeforeUnloadEvent)=>{
-      if(!hasUnsavedDrafts())return;
+      if(!hasUnsavedDrafts()&&!hasUnsavedFreeform())return;
       event.preventDefault(); event.returnValue='';
     };
     const flush=()=>flushDrafts();
     window.addEventListener('beforeunload',warn);
     window.addEventListener('pagehide',flush);
     return ()=>{window.removeEventListener('beforeunload',warn);window.removeEventListener('pagehide',flush);flush();};
+  },[]);
+  // Previews show the actual writing on non-selected pages, without mounting
+  // a separate ProseMirror instance for every page on the canvas.
+  useEffect(()=>{
+    let alive=true;
+    void fetch('/api/notes/'+noteId+'/page-previews',{credentials:'same-origin',cache:'no-store'})
+      .then(async response=>{
+        if(!response.ok)throw new Error('Preview request failed');
+        return response.json() as Promise<{previews:Record<string,string>}>;
+      }).then(result=>{if(alive)setPagePreviews(result.previews);})
+      .catch(()=>{});
+    return ()=>{alive=false;};
+  },[noteId,layout.pages.length,selectedId]);
+
+  useEffect(()=>{
+    let alive=true;
+    if(!selectedId){setActiveFlow(null);return;}
+    // Moving between pages of the same canonical flow must not unmount the
+    // editor: doing so would discard selection and undo history.
+    if(activeFlow?.pageIds.includes(selectedId))return;
+    setActiveFlow(null);setFlowError('');
+    void fetch('/api/notes/'+noteId+'/pages/'+selectedId+'/flow',
+      {credentials:'same-origin',cache:'no-store'})
+      .then(async response=>{
+        if(!response.ok){
+          const problem=await response.json().catch(()=>({})) as {error?:string};
+          throw new Error(problem.error??'Could not load writing flow');
+        }
+        return response.json() as Promise<{rootPageId:string;pageIds:string[]}>;
+      }).then(result=>{if(alive)setActiveFlow(result);})
+      .catch(cause=>{if(alive)setFlowError(cause instanceof Error?cause.message:'Cannot load writing');});
+    return()=>{alive=false;};
+  },[noteId,selectedId,activeFlow]);
+  const handleContinuation=useCallback((result:ContinuationResult)=>{
+    setLayout(result.layout);
+    setActiveFlow({rootPageId:result.flow.rootPageId,pageIds:result.flow.pageIds});
+    setSelectedId(result.flow.pageIds[result.flow.pageIds.length-1]??null);
   },[]);
   const selectedPage=layout.pages.find(page=>page.id===selectedId)??layout.pages[0]??null;
   const displayOrder=useMemo(()=>[...layout.pages].sort((a,b)=>a.createdAt-b.createdAt||a.id.localeCompare(b.id)),[layout.pages]);
@@ -98,28 +144,51 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
     };
   },[layout.pages]);
 
-  const cellW=730*zoom,cellH=1000*zoom,pageW=650*zoom,pageH=920*zoom,pad=100*zoom;
-  const canvasWidth=(bounds.maxX-bounds.minX)*cellW+pageW+pad*2;
-  const canvasHeight=(bounds.maxY-bounds.minY)*cellH+pageH+pad*2;
+  // Documents occupy a stable A4 grid; cards have independent world coordinates.
+  // Calculate view bounds from *both* so freeform items can be placed anywhere.
+  // CSS uses 96 px/in. 210 × 297 mm yields 793.7 × 1122.5 CSS pixels.
+  // Content is laid out unscaled at this size; zoom scales the entire sheet.
+  const A4_W=210*96/25.4,A4_H=297*96/25.4;
+  const STEP_X=880,STEP_Y=1210;
+  const cellW=STEP_X*zoom,cellH=STEP_Y*zoom,pageW=A4_W*zoom,pageH=A4_H*zoom,pad=110*zoom;
+  const minWorldX=Math.min(bounds.minX*STEP_X,...freeform.items.map(item=>item.x));
+  const minWorldY=Math.min(bounds.minY*STEP_Y,...freeform.items.map(item=>item.y));
+  const maxWorldX=Math.max(bounds.maxX*STEP_X+A4_W,...freeform.items.map(item=>item.x+item.width));
+  const maxWorldY=Math.max(bounds.maxY*STEP_Y+A4_H,...freeform.items.map(item=>item.y+item.height));
+  const canvasWidth=(maxWorldX-minWorldX)*zoom+pad*2;
+  const canvasHeight=(maxWorldY-minWorldY)*zoom+pad*2;
   const position=(page:{gx:number;gy:number})=>({
-    x:pad+(page.gx-bounds.minX)*cellW,
-    y:pad+(page.gy-bounds.minY)*cellH
+    x:pad+(page.gx*STEP_X-minWorldX)*zoom,
+    y:pad+(page.gy*STEP_Y-minWorldY)*zoom
+  });
+  const itemPosition=(item:{x:number;y:number})=>({
+    x:pad+(item.x-minWorldX)*zoom,
+    y:pad+(item.y-minWorldY)*zoom
   });
 
   const centerPage=useCallback((pageId:string,behavior:ScrollBehavior='smooth')=>{
     const viewport=scrollRef.current;
     const page=layout.pages.find(value=>value.id===pageId);
     if(!viewport||!page)return;
-    const x=pad+(page.gx-bounds.minX)*cellW;
-    const y=pad+(page.gy-bounds.minY)*cellH;
+    const x=pad+(page.gx*STEP_X-minWorldX)*zoom;
+    const y=pad+(page.gy*STEP_Y-minWorldY)*zoom;
     viewport.scrollTo({left:Math.max(0,x+pageW/2-viewport.clientWidth/2),
       top:Math.max(0,y+pageH/2-viewport.clientHeight/2),behavior});
-  },[layout.pages,bounds.minX,bounds.minY,cellW,cellH,pageW,pageH,pad]);
+  },[layout.pages,minWorldX,minWorldY,zoom,pageW,pageH,pad]);
   useEffect(()=>{
     if(selectedPage?.id)centerPage(selectedPage.id,'instant');
   },[centerPage,selectedPage?.id]);
 
-  function selectPage(id:string){setSelectedId(id);setPreview(null);}
+  useEffect(()=>{
+    if(!selectedItemId)return;
+    const frame=requestAnimationFrame(()=>{
+      const card=[...(scrollRef.current?.querySelectorAll<HTMLElement>('.freeform-position')??[])]
+        .find(node=>node.dataset.canvasId===selectedItemId);
+      card?.scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'});
+    });
+    return ()=>cancelAnimationFrame(frame);
+  },[selectedItemId,freeform.items.length]);
+  function selectPage(id:string){setSelectedItemId(null);setSelectedId(id);setPreview(null);}
   function navigate(side:Direction){
     if(!selectedPage)return;
     const to=attachedNeighbor(selectedPage.id,side,layout.edges);
@@ -129,7 +198,7 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
     // Capture AltGr+Arrow before ProseMirror processes keydown, including when
     // the caret is inside the editable page. Never intercept Ctrl+Arrow.
     if(preview || (event.target instanceof HTMLElement &&
-      ['INPUT','TEXTAREA','SELECT'].includes(event.target.tagName))) return;
+      ['INPUT','SELECT'].includes(event.target.tagName))) return;
     const side=spatialNavigationShortcut(event);
     if(side) {
       event.preventDefault();
@@ -170,7 +239,13 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
       const result=await json<Preview>(base+'/preview','POST',{
         anchorId:selectedPage.id,direction:side,expectedVersion:layout.version
       });
-      setPreview(result);
+      if(result.plan.shifts.length===0){
+        await change(()=>json<Layout>(base+'/insert','POST',{
+          anchorId:result.plan.anchorPageId,direction:result.plan.direction,expectedVersion:result.version
+        }),true);
+      }else{
+        setPreview(result);
+      }
     }catch(cause){
       setError(cause instanceof Error?cause.message:'Cannot insert a page here');
       try{await refresh();}catch{/* The error is already shown. */}
@@ -204,6 +279,41 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
     if(result)forgetDeletedPageDraft(noteId,deletedId);
   }
 
+  async function addCard(kind:CanvasKind) {
+    // Create near the current writing area, outside the page's right margin.
+    const jitter=(freeform.items.length%5)*36;
+    const x=(selectedPage?.gx??0)*STEP_X+A4_W+20+jitter;
+    const y=(selectedPage?.gy??0)*STEP_Y+120+jitter;
+    try{
+      const item=await freeform.create(kind,x,y);
+      setSelectedItemId(item.id);
+      setShowPageActions(false);
+    }catch{/* The canvas error is shown next to the toolbar. */}
+  }
+  const pan=useRef<{x:number;y:number;left:number;top:number;id:number}|null>(null);
+  function pointerDown(event:PointerEvent<HTMLDivElement>) {
+    if(event.button!==0 && event.button!==1)return;
+    const target=event.target as HTMLElement;
+    if(event.button===0 && target.closest('.spatial-page,.freeform-card,.spatial-edge-action,button,textarea'))return;
+    const viewport=scrollRef.current;
+    if(!viewport)return;
+    pan.current={x:event.clientX,y:event.clientY,left:viewport.scrollLeft,top:viewport.scrollTop,id:event.pointerId};
+    viewport.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+  function pointerMove(event:PointerEvent<HTMLDivElement>) {
+    const p=pan.current,viewport=scrollRef.current;
+    if(!p||!viewport||p.id!==event.pointerId)return;
+    viewport.scrollLeft=p.left+p.x-event.clientX;
+    viewport.scrollTop=p.top+p.y-event.clientY;
+  }
+  function pointerUp(event:PointerEvent<HTMLDivElement>) {
+    if(!pan.current||pan.current.id!==event.pointerId)return;
+    const viewport=scrollRef.current;
+    if(viewport?.hasPointerCapture(event.pointerId))viewport.releasePointerCapture(event.pointerId);
+    pan.current=null;
+  }
+
   const miniUnit=22,miniGap=4;
   const miniWidth=(bounds.maxX-bounds.minX+1)*(miniUnit+miniGap)+16;
   const miniHeight=(bounds.maxY-bounds.minY+1)*(miniUnit*1.414+miniGap)+16;
@@ -214,11 +324,13 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
       tabIndex={0} aria-label="Spatial note pages">
       <header className="spatial-topbar">
         <div className="spatial-heading">
+          <button type="button" className="spatial-library-toggle" title="Toggle library" aria-label="Toggle library" onClick={onToggleLibrary}>☷</button>
           <button type="button" className="spatial-back" onClick={onBack}>← Notes</button>
           <div className="spatial-heading-title"><strong>{noteTitle}</strong>
             <small>{layout.pages.length} {layout.pages.length===1?'page':'pages'} · layout v{layout.version}</small></div>
         </div>
         <div className="spatial-toolbar">
+          <div className="spatial-save-slot" id="spatial-save-slot" aria-live="polite"></div>
           <span className="spatial-label">Zoom</span>
           <button type="button" className="spatial-tool" aria-label="Zoom out" onClick={()=>setZoom(z=>Math.max(.38,Math.round((z-.1)*100)/100))}>−</button>
           <span className="spatial-zoom">{Math.round(zoom*100)}%</span>
@@ -229,9 +341,25 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
       </header>
       {error && <div className="spatial-error" role="alert">{error}
         <button type="button" onClick={()=>setError('')} aria-label="Dismiss error">×</button></div>}
+      <div className="spatial-actionbar">
+        <div className="spatial-format-slot" id="spatial-format-slot" aria-label="Document formatting"/>
+        <div className="spatial-add-items" aria-label="Add objects">
+          {!layout.pages.length && <button type="button" title="Add the first A4 document page" onClick={()=>{void firstPage();}}>＋ A4 page</button>}
+          <button type="button" title="Add a movable sticky note" onClick={()=>{void addCard('sticky');}}>＋ Sticky</button>
+          <button type="button" title="Add movable plain text" onClick={()=>{void addCard('text');}}>＋ Text</button>
+          <button type="button" title="Add a movable quotation" onClick={()=>{void addCard('quote');}}>＋ Quote</button>
+          <button type="button" className={showPageActions?'active':''} onClick={()=>setShowPageActions(v=>!v)}>Page actions</button>
+          <button type="button" className={showOverview?'active':''} onClick={()=>setShowOverview(v=>!v)}>Overview</button>
+        </div>
+      </div>
+      {flowError&&<div role="alert" className="spatial-error">Writing unavailable: {flowError}</div>}
+      {freeform.error && <div role="alert" className="spatial-error">{freeform.error}
+        <button type="button" onClick={freeform.clearError}>×</button></div>}
       <div className="spatial-body">
-        <div className="spatial-canvas-viewport" ref={scrollRef}>
-          {loading ? <p className="spatial-center-message">Loading pages…</p> : !layout.pages.length ? (
+        <div className="spatial-canvas-viewport" ref={scrollRef}
+          onPointerDown={pointerDown} onPointerMove={pointerMove}
+          onPointerUp={pointerUp} onPointerCancel={pointerUp}>
+          {loading || freeform.loading ? <p className="spatial-center-message">Loading canvas…</p> : !layout.pages.length && !freeform.items.length ? (
             <div className="spatial-first-page">
               <div className="spatial-page-empty-icon" aria-hidden="true">▤</div>
               <h2>This note has no pages yet.</h2>
@@ -265,26 +393,82 @@ export function SpatialPages({noteId,noteTitle,onBack}:SpatialPagesProps) {
                         event.preventDefault();selectPage(page.id);
                       }
                     }}
-                    className={'spatial-page'+(active?' is-selected':'')}
-                    style={{left:p.x,top:p.y,width:pageW,height:pageH}}
+                    className={'spatial-page'+(active?' is-selected':'')+
+                      (activeFlow?.pageIds.includes(page.id)?' flow-covered':'')}
+                    style={{left:p.x,top:p.y,width:A4_W,height:A4_H,transform:`scale(${zoom})`,transformOrigin:'top left'}}
                     onClick={()=>{if(!active)selectPage(page.id);}}
                     aria-label={'Page '+pageNumbers.get(page.id)+' at '+page.gx+', '+page.gy}>
                     <span className="spatial-page-top">
                       <span>PAGE {pageNumbers.get(page.id)}</span><span>A4</span>
                     </span>
                     <div className="spatial-page-sheet">
-                      {active
-                        ? <PageEditor noteId={noteId} pageId={page.id} zoom={zoom}/>
-                        : <div className="page-inactive-preview">Select to read or edit this page</div>}
+                      {activeFlow?.pageIds.includes(page.id)
+                        ? <div className="flow-placeholder" aria-hidden="true"/>
+                        : <div className="page-inactive-preview">
+                            {pagePreviews[page.id]
+                              ? <div className="page-preview-writing">{pagePreviews[page.id]}</div>
+                              : <span>Blank page · Select to write</span>}
+                          </div>}
                     </div>
                     <span className="spatial-page-footer">{page.gx}, {page.gy}</span>
                   </div>
                 );
               })}
+              {activeFlow&&(()=>{
+                const root=layout.pages.find(p=>p.id===activeFlow.rootPageId);
+                if(!root)return null;
+                const p=position(root);
+                return <FlowWritingLayer key={activeFlow.rootPageId}
+                  noteId={noteId} rootPageId={activeFlow.rootPageId}
+                  pageIds={activeFlow.pageIds} layoutVersion={layout.version}
+                  x={p.x} y={p.y} zoom={zoom}
+                  onContinuation={handleContinuation}/>;
+              })()}
+              {freeform.items.map(item=>{
+                const p=itemPosition(item);
+                return <div key={item.id} className="freeform-position" data-canvas-id={item.id}
+                  style={{left:p.x,top:p.y,width:item.width,height:item.height,
+                    transform:'scale('+zoom+')',transformOrigin:'top left',fontSize:14}}>
+                  <FreeformCard noteId={noteId} item={item} zoom={zoom}
+                    selected={selectedItemId===item.id} onSelect={setSelectedItemId}
+                    onUpdate={freeform.update} onDelete={freeform.remove} onRefresh={freeform.refresh}/>
+                </div>;
+              })}
+              {selectedPage&&DIRECTIONS.map(side=>{
+                const link=attachedNeighbor(selectedPage.id,side,layout.edges);
+                if(link && activeFlow?.pageIds.includes(selectedPage.id) &&
+                  activeFlow.pageIds.includes(link))return null;
+                const near=byCoord.get((selectedPage.gx+DELTA[side][0])+':'+(selectedPage.gy+DELTA[side][1]));
+                const center=position(selectedPage);
+                const placement=side==='N'?{left:center.x+pageW/2-18,top:center.y-43}:
+                  side==='S'?{left:center.x+pageW/2-18,top:center.y+pageH+8}:
+                  side==='E'?{left:center.x+pageW+8,top:center.y+pageH/2-18}:
+                  {left:center.x-43,top:center.y+pageH/2-18};
+                return <button type="button" key={side} className="spatial-edge-action"
+                  title={link?'Insert a page into this attachment':near?'Attach neighboring page':'Add an attached A4 page'}
+                  style={placement}
+                  onClick={()=>{
+                    if(near&&!link){void linkAdjacent(side,near.id);}
+                    else void showPreview(side);
+                  }}>{near&&!link?'↔':'＋'}</button>;
+              })}
             </div>
           )}
         </div>
-        {!loading && !!layout.pages.length &&
+        {showOverview && !!layout.pages.length && <div className="spatial-floating-overview">
+          <p className="eyebrow">PAGE OVERVIEW</p>
+          <div className="spatial-minimap-scroll"><div className="spatial-minimap"
+            style={{width:miniWidth,height:miniHeight}}>
+            {layout.pages.map(page=><button key={page.id} type="button"
+              className={'spatial-mini-page'+(page.id===selectedPage?.id?' active':'')}
+              aria-label={'Go to page '+pageNumbers.get(page.id)}
+              style={{left:8+(page.gx-bounds.minX)*(miniUnit+miniGap),
+                top:8+(page.gy-bounds.minY)*(miniUnit*1.414+miniGap),
+                width:miniUnit,height:miniUnit*1.414}}
+              onClick={()=>selectPage(page.id)}/>)}
+          </div></div>
+        </div>}
+        {showPageActions && !loading && !!layout.pages.length &&
           <aside className="spatial-inspector" aria-label="Page controls">
             <div className="spatial-inspector-head">
               <span className="eyebrow">CURRENT PAGE</span>

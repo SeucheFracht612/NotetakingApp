@@ -19,7 +19,7 @@ test('owner auth, session persistence, CSRF, and logout', async () => {
   try {
     let db = openDatabase(filename);
     const migrations = db.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get() as { count: number };
-    assert.equal(migrations.count, 4);
+    assert.equal(migrations.count, 7);
     await createOwner(db, 'correct-horse-battery-staple');
     await assert.rejects(() => createOwner(db, 'another-long-password'), /already exists/);
     let app = await buildApp({ db, config });

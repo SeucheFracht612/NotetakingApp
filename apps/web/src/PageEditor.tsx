@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
+import { createPortal } from 'react-dom';
 import StarterKit from '@tiptap/starter-kit';
 import { getDraft, type JsonDoc, type PageDraft } from './document-autosave';
 
@@ -60,18 +61,20 @@ function EditablePage({ manager,zoom }: {manager:PageDraft;zoom:number}) {
     </div>
   );
   const classes='page-save-status save-'+snapshot.status;
+  const target=document.getElementById('spatial-format-slot');
+  const statusTarget=document.getElementById('spatial-save-slot');
+  const statusLabel=snapshot.status==='saved'?'✓ Page saved':snapshot.status==='saving'?'Saving…':
+    snapshot.status==='conflict'?'⚠ Conflict — draft kept':
+    snapshot.status==='offline'?'⚠ Save unavailable':
+    snapshot.status==='loading'?'Loading…':'● Unsaved';
   return <>
-    {toolbar}
-    <div className="page-editor-viewport" ref={viewportRef} style={{fontSize:Math.max(9,15*zoom)}}>
+    {toolbar && target ? createPortal(toolbar,target) : null}
+    {statusTarget ? createPortal(<span className={classes} role="status">{statusLabel}</span>,statusTarget) : null}
+    <div className="page-editor-viewport" ref={viewportRef}>
       <EditorContent editor={editor} className="page-rich-content" />
     </div>
     <div className="page-editor-footer">
-      <span className={classes} role="status" aria-live="polite">
-        {snapshot.status==='saved'?'✓ Saved':snapshot.status==='saving'?'Saving…':
-          snapshot.status==='conflict'?'⚠ Conflict — draft kept':
-          snapshot.status==='offline'?'⚠ Save unavailable':
-          snapshot.status==='loading'?'Loading…':'● Unsaved'}
-      </span>
+      {!statusTarget && <span className={classes} role="status">{statusLabel}</span>}
       {overflow && <span className="page-overflow-warning" role="status" title="Content remains saved but extends beyond the A4 writing area">
         A4 overflow — scroll to continue
       </span>}

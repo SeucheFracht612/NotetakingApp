@@ -2,7 +2,7 @@
 
 A personal, self-hostable research and lecture-note workspace. One owner per installation; **no public registration, shared hosted service, or preconfigured credentials**.
 
-> **Status:** Slices 0–2 are merged into main. **Slice 3 rich-text editing** is in [PR #8](https://github.com/SeucheFracht612/NotetakingApp/pull/8) on branch `feat/slice-3-rich-text`. Images, PDF/ink, and automated text pagination are **not** implemented.
+> **Status:** Slices 0–3 are merged into main. **Slice 4 — unified canvas and freeform objects** is under review in [PR #10](https://github.com/SeucheFracht612/NotetakingApp/pull/10) on branch `feat/slice-4-unified-canvas`. Image uploads, inking, diagram drawing, PDF embedding and auto-pagination are not yet implemented.
 
 ## Requirements
 
@@ -179,3 +179,93 @@ Authenticated owner API (same-origin mutations):
 6. Check a tablet-sized Firefox viewport. Ctrl + Arrow moves within text normally, and **AltGr + Arrow** navigates attached pages even while writing.
 
 **Not included:** image/PDF attachment, inking, cross-page flowing paragraphs, merging conflicting drafts, collaboration, or remote deployment. A successful CI run does not replace the manual checks above.
+
+
+## Slice 4: unified A4 + freeform canvas
+
+Try locally:
+
+    git fetch origin
+    git switch feat/slice-4-unified-canvas
+    npm ci
+    npm run dev
+
+Existing owner, folder, note, spatial layout, and page contents are preserved by **additive migration 5**. As usual, back up a valuable database before testing development branches.
+
+### Everyday workflow
+
+- Open any note. Its **A4 pages and movable cards inhabit the same scrollable canvas**; there is no separate canvas mode. The library sidebar can be collapsed using the top-left button.
+- The **formatting toolbar is outside the A4 sheet**. The selected page is editable and its confirmed save status appears in the heading. Other pages show compact previews of actual saved text, fetched via one authenticated request rather than mounting an editor for each page.
+- Use **+ Sticky**, **+ Text**, or **+ Quote** for freely positioned, overlapping cards. New objects initially appear near the current page. Drag a card by its header, resize it from its bottom-right handle, and type inside its text area. This slice stores **plain text** in cards, with a 6000-character bound.
+- Use the contextual **+** buttons beside a selected page edge to append/insert A4 sheets. Empty insertions happen directly; when existing page groups must shift, the prior preview and confirmation are still required. Nearby unlinked A4 pages show an explicit attachment action (↔).
+- Open **Page actions** for the detailed directional actions (navigate, attach, detach, delete) and **Overview** for the page map. Neither occupies the writing area by default.
+- Pan via trackpad/scroll or drag the **empty canvas background**. Use zoom controls or Center page to focus the selected A4 page. **AltGr + Arrow** continues to follow explicit page attachments; Ctrl + Arrow remains for text cursor navigation.
+- Card edits are debounced and saved separately from A4 content. A saved status only appears after an API acknowledgement; if a card cannot be saved, its text remains as a browser-session draft with Retry/Copy controls. Two tabs changing the same card get a revision conflict and **do not overwrite each other**. Freeform cards are independent of page movement.
+
+The design follows the minimal grayscale UI reference (near-black in system dark mode with restrained accent, and a light equivalent) across the login, library, workspace, dialogs and canvas.
+
+### Freeform canvas API
+
+Routes are owner-only and enforce the existing same-origin protections:
+
+- \`GET /api/notes/:noteId/canvas\` returns \`{noteId,version,items}\`.
+- \`POST /api/notes/:noteId/canvas/items\` takes \`{kind,x,y,width,height,content?,expectedVersion}\` to create an item (sticky/text/quote). Note-wide version prevents stale creation.
+- \`PATCH /api/notes/:noteId/canvas/items/:itemId\` takes \`{expectedRevision,x?,y?,width?,height?,content?}\`; each successful change increments **that item's** revision.
+- \`DELETE /api/notes/:noteId/canvas/items/:itemId\` takes \`{expectedRevision}\`.
+- \`GET /api/notes/:noteId/page-previews\` returns short, plain-text excerpts of the note's A4 page contents for efficient canvas viewing.
+
+Coordinates and dimensions are bounded integer world units, but **not snapped to the A4 grid**. A card may overlap a page. Card state is scoped per note; deleting the note cascades the objects. No HTML content is inserted or rendered by the API.
+
+### Slice 4 acceptance checklist (Firefox and tablet)
+
+1. In an existing note, add all three types of cards, write text, move and resize them, refresh the browser, and check positions and content.
+2. Add two cards close together and intentionally overlap them. Confirm the page attachments and page insertion mechanics still work; freeform cards should stay in place during page insertion.
+3. Open another note. Its canvas items should be independent. Confirm page previews display saved document text.
+4. Try Ctrl + Arrow while editing, AltGr + Arrow for attached-page navigation, zoom, empty-background drag to pan, library collapse and reopen, and tablet screen sizing.
+5. Add an A4 page to a note started with only freeform cards. Try both a simple page addition (no confirmation) and an insertion requiring displacement (confirmation).
+6. Test card autosave and conflict recovery: edit the same card from two browser tabs, then verify a stale update is rejected without silently losing the local text.
+7. Check both system light and dark themes, mobile folder navigation, formatting toolbar and status display.
+
+**Not included yet:** image/PDF uploads, ink/handwriting, drawing/diagrams, true freeform connectors, multiple-selection/group dragging, rich text inside freeform cards or automatic cross-page text flow. No VPS deployment performed. PR #10 stays draft pending manual acceptance.
+
+
+## Slice 4B: Continuous A4 writing flows (experimental, unmerged)
+
+This iteration changes the architecture of text inside the **open Slice 4 PR**. The previous Slice 4 plain freeform system remains, but now has quiet styling and proper quotation source fields. It has **not** received hands-on Firefox acceptance.
+
+### Data integrity and behavior
+
+- **Real A4**: 210 × 297 mm document geometry, fixed 16px text layout, ~25mm margins. At every zoom level the *whole sheet* scales together. CSS millimeters are print-related units (96 CSS px/inch), not a guarantee that a particular monitor is calibrated to real centimeters.
+- **One canonical writing document per branch**: migration 6 creates writing flows and copies earlier per-page TipTap JSON into independent root flows. The API lazily adopts pages made after that migration, preserving their existing content/revision. Existing document content is not merged into its spatial neighbors.
+- **TipTap v3 pagination**: the MIT-licensed \`tiptap-pagination-plus\` extension lays out one ProseMirror editor through successive vertical A4 sheets. This preserves editing selection/undo across page breaks within a writing flow; the paginated visual pages correspond to graph continuation members.
+- **Physical continuation**: once a saved flow needs another page, the client checks the insertion plan under the tail's southern edge. If no existing page needs to move, it appends a new attached sheet automatically. If pages would shift, a **confirmation dialog** shows the displacement before anything moves. The API repeats the calculation atomically and rejects stale versions or impossible collisions.
+- **Protected continuation edges**: you can't delete continuation sheets separately or insert another page between two automatically continued sheets via the manual page controls. Other independent A4 branches keep their own writing flows.
+- **No silent deletion**: reducing the text length can leave empty continuation sheets; automatically deleting them is deferred until we can prove there is no branch or saved content attached. Writing isn't discarded just to shrink the graph.
+- **Stale tabs**: old per-page save requests are rejected with HTTP 409 after their page joins a flow. The older tab keeps its locally recoverable draft. Document saves have their own optimistic revisions and browser-session recovery.
+
+### Freeform annotations
+
+- Sticky notes now use the same neutral surface palette, rather than an arbitrary brown/yellow color. Hover/select to reveal movement/deletion controls.
+- Plain text cards can be frameless; all annotations scale as complete objects at canvas zoom.
+- Quotations now have distinct serif/italic presentation plus **source** (up to 350 characters) and **locator/page** (up to 80 characters) persisted as separate validated fields via migration 7. This is a first step toward source-backed citations; no Zotero integration yet.
+
+### Test instructions
+
+    git fetch origin
+    git switch feat/slice-4-unified-canvas
+    npm ci
+    npm run dev
+
+Use a fresh test note rather than your only important lecture, and make a backup of \`.data/\` first. Test in Firefox on the laptop:
+
+1. Write a continuous 2–3-page text in a new A4 branch. Check the cursor, formatting, lists, text search, undo/redo and content after refreshing.
+2. Reach the bottom of the first sheet by typing normally. Confirm the next sheet appears **below**, attached in the spatial graph, with no split into independent documents.
+3. Create an unrelated page directly below another writing-flow root, then type until the root needs a continuation. Confirm you see a displacement warning, can cancel, and no writing is lost. Confirm acceptance only moves exactly the previewed pages.
+4. Switch among continuation sheets and other branches. Check the editor's caret/undo remains stable within a flow; test AltGr+Arrow and conventional Ctrl+Arrow text navigation.
+5. Test a multi-paragraph paste, deletion that causes reflow back toward earlier pages, headings and lists, and document reload. Report any Firefox pagination misalignment or caret jumps.
+6. Add, type, move and resize all three freeform object kinds. Confirm quotation source/locator fields persist, cards do not obscure their document unexpectedly, and both light/dark appearance and Galaxy Tab S9 navigation remain usable.
+7. Open two tabs, edit one flow in both, and verify the stale tab's save is rejected rather than overwriting the first.
+
+**Explicit limitations:** pagination comes from a newly integrated third-party extension and has not been browser-verified in this PR. The page geometry and continuation synchronization still need careful manual Firefox checks. The extension is capped at 50 auto-continued visual sheets for safety. No print/PDF guarantee, automatic deletion of blank continuation pages, full source citation manager, image/ink/diagram tools or deployment yet.
+
+The page-number/preview layer is still simplified for inactive branches. Do **not** merge PR #10 based on CI alone.
