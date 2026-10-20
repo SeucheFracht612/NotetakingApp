@@ -227,3 +227,45 @@ Coordinates and dimensions are bounded integer world units, but **not snapped to
 7. Check both system light and dark themes, mobile folder navigation, formatting toolbar and status display.
 
 **Not included yet:** image/PDF uploads, ink/handwriting, drawing/diagrams, true freeform connectors, multiple-selection/group dragging, rich text inside freeform cards or automatic cross-page text flow. No VPS deployment performed. PR #10 stays draft pending manual acceptance.
+
+
+## Slice 4B: Continuous A4 writing flows (experimental, unmerged)
+
+This iteration changes the architecture of text inside the **open Slice 4 PR**. The previous Slice 4 plain freeform system remains, but now has quiet styling and proper quotation source fields. It has **not** received hands-on Firefox acceptance.
+
+### Data integrity and behavior
+
+- **Real A4**: 210 × 297 mm document geometry, fixed 16px text layout, ~25mm margins. At every zoom level the *whole sheet* scales together. CSS millimeters are print-related units (96 CSS px/inch), not a guarantee that a particular monitor is calibrated to real centimeters.
+- **One canonical writing document per branch**: migration 6 creates writing flows and copies earlier per-page TipTap JSON into independent root flows. The API lazily adopts pages made after that migration, preserving their existing content/revision. Existing document content is not merged into its spatial neighbors.
+- **TipTap v3 pagination**: the MIT-licensed \`tiptap-pagination-plus\` extension lays out one ProseMirror editor through successive vertical A4 sheets. This preserves editing selection/undo across page breaks within a writing flow; the paginated visual pages correspond to graph continuation members.
+- **Physical continuation**: once a saved flow needs another page, the client checks the insertion plan under the tail's southern edge. If no existing page needs to move, it appends a new attached sheet automatically. If pages would shift, a **confirmation dialog** shows the displacement before anything moves. The API repeats the calculation atomically and rejects stale versions or impossible collisions.
+- **Protected continuation edges**: you can't delete continuation sheets separately or insert another page between two automatically continued sheets via the manual page controls. Other independent A4 branches keep their own writing flows.
+- **No silent deletion**: reducing the text length can leave empty continuation sheets; automatically deleting them is deferred until we can prove there is no branch or saved content attached. Writing isn't discarded just to shrink the graph.
+- **Stale tabs**: old per-page save requests are rejected with HTTP 409 after their page joins a flow. The older tab keeps its locally recoverable draft. Document saves have their own optimistic revisions and browser-session recovery.
+
+### Freeform annotations
+
+- Sticky notes now use the same neutral surface palette, rather than an arbitrary brown/yellow color. Hover/select to reveal movement/deletion controls.
+- Plain text cards can be frameless; all annotations scale as complete objects at canvas zoom.
+- Quotations now have distinct serif/italic presentation plus **source** (up to 350 characters) and **locator/page** (up to 80 characters) persisted as separate validated fields via migration 7. This is a first step toward source-backed citations; no Zotero integration yet.
+
+### Test instructions
+
+    git fetch origin
+    git switch feat/slice-4-unified-canvas
+    npm ci
+    npm run dev
+
+Use a fresh test note rather than your only important lecture, and make a backup of \`.data/\` first. Test in Firefox on the laptop:
+
+1. Write a continuous 2–3-page text in a new A4 branch. Check the cursor, formatting, lists, text search, undo/redo and content after refreshing.
+2. Reach the bottom of the first sheet by typing normally. Confirm the next sheet appears **below**, attached in the spatial graph, with no split into independent documents.
+3. Create an unrelated page directly below another writing-flow root, then type until the root needs a continuation. Confirm you see a displacement warning, can cancel, and no writing is lost. Confirm acceptance only moves exactly the previewed pages.
+4. Switch among continuation sheets and other branches. Check the editor's caret/undo remains stable within a flow; test AltGr+Arrow and conventional Ctrl+Arrow text navigation.
+5. Test a multi-paragraph paste, deletion that causes reflow back toward earlier pages, headings and lists, and document reload. Report any Firefox pagination misalignment or caret jumps.
+6. Add, type, move and resize all three freeform object kinds. Confirm quotation source/locator fields persist, cards do not obscure their document unexpectedly, and both light/dark appearance and Galaxy Tab S9 navigation remain usable.
+7. Open two tabs, edit one flow in both, and verify the stale tab's save is rejected rather than overwriting the first.
+
+**Explicit limitations:** pagination comes from a newly integrated third-party extension and has not been browser-verified in this PR. The page geometry and continuation synchronization still need careful manual Firefox checks. The extension is capped at 50 auto-continued visual sheets for safety. No print/PDF guarantee, automatic deletion of blank continuation pages, full source citation manager, image/ink/diagram tools or deployment yet.
+
+The page-number/preview layer is still simplified for inactive branches. Do **not** merge PR #10 based on CI alone.
