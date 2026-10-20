@@ -73,6 +73,9 @@ test('flow saves a canonical rich document and appends physical downward continu
       fromPageId:root,direction:'S',expectedVersion:3
     },cookie)).statusCode,409);
     const continuation=appended.json().flow.pageIds[1] as string;
+    assert.equal((await send('DELETE','/api/notes/'+note+'/pages/'+continuation,{
+      expectedVersion:3
+    },cookie)).statusCode,409);
     assert.equal(appended.json().layout.pages.find((p:{id:string})=>p.id===continuation).gy,1);
     assert.equal(appended.json().layout.pages.find((p:{id:string})=>p.id===other).gy,2);
     assert.deepEqual((await send('GET','/api/notes/'+note+'/pages/'+continuation+'/flow',undefined,cookie)).json().doc,formatted);
@@ -88,6 +91,16 @@ test('flow saves a canonical rich document and appends physical downward continu
     assert.equal(changed.json().revision,2);
     const different=await send('GET',otherFlow,undefined,cookie);
     assert.notDeepEqual(different.json().doc,formatted);
+    // A document written by an older per-page client is preserved when
+    // the first flow request lazily adopts that page.
+    const oldNote=(await send('POST','/api/notes',{title:'Imported',folderId:folder},cookie)).json().note.id as string;
+    const oldPage=(await send('POST','/api/notes/'+oldNote+'/pages/initialize',{expectedVersion:0},cookie)).json().pages[0].id as string;
+    assert.equal((await send('PUT','/api/notes/'+oldNote+'/pages/'+oldPage+'/document',{
+      expectedRevision:0,doc:formatted
+    },cookie)).statusCode,200);
+    const adopted=(await send('GET','/api/notes/'+oldNote+'/pages/'+oldPage+'/flow',undefined,cookie)).json();
+    assert.deepEqual(adopted.doc,formatted);
+    assert.equal(adopted.revision,1);
     await app.close();db.close();
     db=openDatabase(filename);app=await buildApp({db,config});await app.ready();
     assert.equal((await send('GET',flowPath,undefined,cookie)).json().pageIds.length,2);
