@@ -2,7 +2,7 @@ import { useEffect,useRef,useState,useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { useEditor,EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { PaginationPlus } from 'tiptap-pagination-plus';
+type PaginationExtension=typeof import('tiptap-pagination-plus')['PaginationPlus'];
 import { getWritingFlowDraft, type JsonDoc } from './document-autosave';
 
 type TiptapContent=NonNullable<Parameters<typeof useEditor>[0]['content']>;
@@ -29,8 +29,9 @@ function Tool({label,onClick,disabled=false}:{label:string;onClick():void;disabl
   return <button type="button" className="page-format-button" disabled={disabled}
     onMouseDown={e=>e.preventDefault()} onClick={onClick}>{label}</button>;
 }
-function Surface({manager,rootPageId,noteId,pageIds,layoutVersion,zoom,x,y,onContinuation}:Props&{
-  manager:ReturnType<typeof getWritingFlowDraft>
+function Surface({manager,PaginationPlus,rootPageId,noteId,pageIds,layoutVersion,zoom,x,y,onContinuation}:Props&{
+  manager:ReturnType<typeof getWritingFlowDraft>;
+  PaginationPlus:PaginationExtension;
 }) {
   const snapshot=useSyncExternalStore(manager.subscribe,manager.getSnapshot);
   const [pageCount,setPageCount]=useState(1);
@@ -147,10 +148,22 @@ function Surface({manager,rootPageId,noteId,pageIds,layoutVersion,zoom,x,y,onCon
 export function FlowWritingLayer(props:Props){
   const manager=getWritingFlowDraft(props.noteId,props.rootPageId);
   const snapshot=useSyncExternalStore(manager.subscribe,manager.getSnapshot);
+  const [Pagination,setPagination]=useState<PaginationExtension|null>(null);
+  const [loadError,setLoadError]=useState('');
+  useEffect(()=>{
+    let active=true;
+    void import('tiptap-pagination-plus').then(module=>{
+      if(active)setPagination(module.PaginationPlus);
+    }).catch(cause=>{
+      if(active)setLoadError(cause instanceof Error?cause.message:'Could not load pagination');
+    });
+    return()=>{active=false;};
+  },[]);
   useEffect(()=>{
     void manager.load();
     return()=>{void manager.save();};
   },[manager]);
-  if(snapshot.status==='loading')return null;
-  return <Surface manager={manager} {...props}/>;
+  if(loadError)return <div role="alert" className="flow-writing-error">Pagination unavailable: {loadError}</div>;
+  if(snapshot.status==='loading'||!Pagination)return null;
+  return <Surface manager={manager} PaginationPlus={Pagination} {...props}/>;
 }
