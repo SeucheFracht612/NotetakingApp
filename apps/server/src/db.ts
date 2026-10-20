@@ -105,6 +105,34 @@ const canvasMigration = [
   'CREATE INDEX canvas_items_note_idx ON canvas_items(note_id,created_at,id);'
 ].join('\n');
 
+
+/* One canonical ProseMirror document per writing flow, initially one flow per
+   preexisting page. Continuations are member pages, not separate documents. */
+const writingFlowMigration = [
+  'CREATE TABLE writing_flows (',
+  '  note_id TEXT NOT NULL,',
+  '  root_page_id TEXT NOT NULL,',
+  '  revision INTEGER NOT NULL CHECK(revision >= 0),',
+  '  document_json TEXT NOT NULL,',
+  '  updated_at INTEGER NOT NULL,',
+  '  PRIMARY KEY(note_id,root_page_id),',
+  '  FOREIGN KEY(note_id,root_page_id) REFERENCES note_pages(note_id,id) ON DELETE CASCADE',
+  ');',
+  'CREATE TABLE writing_flow_pages (',
+  '  note_id TEXT NOT NULL,',
+  '  page_id TEXT NOT NULL,',
+  '  root_page_id TEXT NOT NULL,',
+  '  ordinal INTEGER NOT NULL CHECK(ordinal >= 0),',
+  '  PRIMARY KEY(note_id,page_id),',
+  '  UNIQUE(note_id,root_page_id,ordinal),',
+  '  FOREIGN KEY(note_id,page_id) REFERENCES note_pages(note_id,id) ON DELETE CASCADE,',
+  '  FOREIGN KEY(note_id,root_page_id) REFERENCES writing_flows(note_id,root_page_id) ON DELETE CASCADE',
+  ');',
+  'CREATE INDEX writing_flow_members_idx ON writing_flow_pages(note_id,root_page_id,ordinal);',
+  "INSERT INTO writing_flows(note_id,root_page_id,revision,document_json,updated_at) SELECT p.note_id,p.id,COALESCE(d.revision,0),COALESCE(d.document_json,'{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\"}]}'),COALESCE(d.updated_at,p.created_at) FROM note_pages p LEFT JOIN page_documents d ON d.note_id=p.note_id AND d.page_id=p.id;",
+  'INSERT INTO writing_flow_pages(note_id,page_id,root_page_id,ordinal) SELECT note_id,id,id,0 FROM note_pages;'
+].join('\n');
+
 export function openDatabase(filename: string): AppDatabase {
   fs.mkdirSync(path.dirname(filename), { recursive: true });
   const db = new Database(filename);
@@ -117,7 +145,7 @@ export function openDatabase(filename: string): AppDatabase {
 
 export function migrate(db: AppDatabase): void {
   db.exec('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)');
-  const migrations = [{ version: 1, sql: initialMigration }, { version: 2, sql: libraryMigration }, { version: 3, sql: pageMigration }, { version: 4, sql: documentMigration }, { version: 5, sql: canvasMigration }];
+  const migrations = [{ version: 1, sql: initialMigration }, { version: 2, sql: libraryMigration }, { version: 3, sql: pageMigration }, { version: 4, sql: documentMigration }, { version: 5, sql: canvasMigration }, { version: 6, sql: writingFlowMigration }];
   for (const migration of migrations) {
     db.transaction(() => {
       const existing = db.prepare('SELECT 1 FROM schema_migrations WHERE version = ?').get(migration.version);
