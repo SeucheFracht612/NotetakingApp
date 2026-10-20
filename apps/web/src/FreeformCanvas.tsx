@@ -246,8 +246,8 @@ export function FreeformCard({noteId,item,zoom,selected,onSelect,onUpdate,onDele
     const startX=event.clientX,startY=event.clientY;
     handle.setPointerCapture(event.pointerId);
     const move=(e:globalThis.PointerEvent)=>{
-      card.style.width=Math.min(900,Math.max(120,item.width+(e.clientX-startX)/zoom))*zoom+'px';
-      card.style.height=Math.min(800,Math.max(90,item.height+(e.clientY-startY)/zoom))*zoom+'px';
+      card.style.width=Math.min(900,Math.max(120,item.width+(e.clientX-startX)/zoom))+'px';
+      card.style.height=Math.min(800,Math.max(90,item.height+(e.clientY-startY)/zoom))+'px';
     };
     const finish=(e:globalThis.PointerEvent)=>{
       handle.removeEventListener('pointermove',move);
@@ -256,7 +256,7 @@ export function FreeformCard({noteId,item,zoom,selected,onSelect,onUpdate,onDele
       const width=Math.round(Math.min(900,Math.max(120,item.width+(e.clientX-startX)/zoom)));
       const height=Math.round(Math.min(800,Math.max(90,item.height+(e.clientY-startY)/zoom)));
       void onUpdate(item.id,{width,height}).catch(()=>{
-        card.style.width=item.width*zoom+'px';card.style.height=item.height*zoom+'px';
+        card.style.width=item.width+'px';card.style.height=item.height+'px';
       });
     };
     handle.addEventListener('pointermove',move);
@@ -278,7 +278,7 @@ export function FreeformCard({noteId,item,zoom,selected,onSelect,onUpdate,onDele
       setMessage(cause instanceof Error?cause.message:'Cannot reload card');
     }
   }
-  return <section className={'freeform-card freeform-'+item.kind+(selected?' selected':'')}
+  return <section className={'freeform-card freeform-'+(item.kind==='text'?'plain':item.kind)+(selected?' selected':'')}
     data-item-id={item.id} aria-label={item.kind+' canvas card'} onPointerDown={()=>onSelect(item.id)}>
     <div className="freeform-card-top">
       <button type="button" className="freeform-grab" onPointerDown={drag}

@@ -427,8 +427,8 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
               {freeform.items.map(item=>{
                 const p=itemPosition(item);
                 return <div key={item.id} className="freeform-position" data-canvas-id={item.id}
-                  style={{left:p.x,top:p.y,width:item.width*zoom,height:item.height*zoom,
-                    fontSize:Math.max(12,14*zoom)}}>
+                  style={{left:p.x,top:p.y,width:item.width,height:item.height,
+                    transform:'scale('+zoom+')',transformOrigin:'top left',fontSize:14}}>
                   <FreeformCard noteId={noteId} item={item} zoom={zoom}
                     selected={selectedItemId===item.id} onSelect={setSelectedItemId}
                     onUpdate={freeform.update} onDelete={freeform.remove} onRefresh={freeform.refresh}/>

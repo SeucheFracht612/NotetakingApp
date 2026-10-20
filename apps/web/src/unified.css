@@ -224,9 +224,9 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .freeform-sticky {background:var(--ui-raised);border-color:var(--ui-border);}
 .freeform-sticky .freeform-card-top {background:var(--ui-raised);}
 .freeform-sticky .freeform-text {background:transparent;color:var(--ui-text);}
-.freeform-text.freeform-card {border-color:transparent;box-shadow:none;background:transparent;}
-.freeform-text.freeform-card:hover,.freeform-text.freeform-card.selected,
-.freeform-text.freeform-card:focus-within {border-color:var(--ui-border);}
+.freeform-plain.freeform-card {border-color:transparent;box-shadow:none;background:transparent;}
+.freeform-plain.freeform-card:hover,.freeform-plain.freeform-card.selected,
+.freeform-plain.freeform-card:focus-within {border-color:var(--ui-border);}
 .freeform-quote {border-left:2px solid var(--ui-muted);background:var(--ui-surface);}
 .freeform-quote .freeform-text {font-family:Georgia, 'Times New Roman',serif;font-style:italic;
   padding:40px 19px 4px 35px;font-size:17px;line-height:1.55;}
