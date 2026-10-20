@@ -90,6 +90,9 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
   useEffect(()=>{
     let alive=true;
     if(!selectedId){setActiveFlow(null);return;}
+    // Moving between pages of the same canonical flow must not unmount the
+    // editor: doing so would discard selection and undo history.
+    if(activeFlow?.pageIds.includes(selectedId))return;
     setActiveFlow(null);setFlowError('');
     void fetch('/api/notes/'+noteId+'/pages/'+selectedId+'/flow',
       {credentials:'same-origin',cache:'no-store'})
@@ -102,7 +105,7 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
       }).then(result=>{if(alive)setActiveFlow(result);})
       .catch(cause=>{if(alive)setFlowError(cause instanceof Error?cause.message:'Cannot load writing');});
     return()=>{alive=false;};
-  },[noteId,selectedId]);
+  },[noteId,selectedId,activeFlow]);
   const handleContinuation=useCallback((result:ContinuationResult)=>{
     setLayout(result.layout);
     setActiveFlow({rootPageId:result.flow.rootPageId,pageIds:result.flow.pageIds});
