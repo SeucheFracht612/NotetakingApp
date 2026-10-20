@@ -78,8 +78,8 @@ function translateGraphError(error: unknown): never {
 function continuationPair(db:AppDatabase,noteId:string,fromId:string,toId:string):boolean {
   const rows=db.prepare('SELECT page_id AS pageId, root_page_id AS rootId, ordinal FROM writing_flow_pages WHERE note_id=? AND page_id IN (?,?)')
     .all(noteId,fromId,toId) as {pageId:string;rootId:string;ordinal:number}[];
-  if(rows.length!==2 || rows[0].rootId!==rows[1].rootId)return false;
-  return Math.abs(rows[0].ordinal-rows[1].ordinal)===1;
+  if(rows.length!==2 || rows[0]!.rootId!==rows[1]!.rootId)return false;
+  return Math.abs(rows[0]!.ordinal-rows[1]!.ordinal)===1;
 }
 function preventSplitContinuation(db:AppDatabase,noteId:string,fromId:string,toId:string|null):void {
   if(toId && continuationPair(db,noteId,fromId,toId)){
