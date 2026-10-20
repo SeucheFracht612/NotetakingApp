@@ -39,6 +39,9 @@ test('flow saves a canonical rich document and appends physical downward continu
     const starting=await send('GET',flowPath,undefined,cookie);
     assert.equal(starting.statusCode,200,starting.body);
     assert.equal(starting.json().revision,0);
+    assert.equal((await send('PUT','/api/notes/'+note+'/pages/'+root+'/document',{
+      expectedRevision:0,doc:formatted
+    },cookie)).statusCode,409);
     assert.deepEqual(starting.json().pageIds,[root]);
     const saved=await send('PUT',flowPath,{expectedRevision:0,doc:formatted},cookie);
     assert.equal(saved.statusCode,200,saved.body);
