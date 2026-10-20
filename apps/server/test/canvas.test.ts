@@ -19,7 +19,7 @@ test('freeform canvas CRUD, auth, versioned edits and note isolation survive res
       ...(payload===undefined?{}:{payload})});
   try{
     await app.ready();
-    assert.equal((db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get() as {n:number}).n,5);
+    assert.equal((db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get() as {n:number}).n,6);
     await createOwner(db,'another-strong-test-password');
     const cookie=String((await request('POST','/api/auth/login',{password:'another-strong-test-password'})).headers['set-cookie']).split(';')[0];
     const folder=(await request('POST','/api/folders',{name:'Sources'},cookie)).json().folder.id as string;

@@ -20,7 +20,7 @@ test('spatial API: migrations, revision checks, owner protection, link/unlink, r
       ...(payload===undefined?{}:{payload})});
   try {
     await app.ready();
-    assert.equal((db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get() as {n:number}).n,5);
+    assert.equal((db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get() as {n:number}).n,6);
     await createOwner(db,'test-long-password-987');
     const login=await request('POST','/api/auth/login',{password:'test-long-password-987'});
     const cookie=String(login.headers['set-cookie']).split(';')[0];
