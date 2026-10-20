@@ -103,7 +103,7 @@ export function appendWritingContinuation(db:AppDatabase,rawNote:unknown,rawPage
     if(flow.pageIds.length>=MAX_FLOW_PAGES || layout.pages.length>=2000){
       throw new LibraryError(409,'Page limit reached');
     }
-    const tail=flow.pageIds[flow.pageIds.length-1];
+    const tail=flow.pageIds[flow.pageIds.length-1]!;
     let plan:InsertionPlan;
     try{plan=planInsertion(layout.pages,layout.edges,tail,'S');}
     catch(cause) {
