@@ -23,7 +23,7 @@ test('flow saves a canonical rich document and appends physical downward continu
       ...(payload===undefined?{}:{payload})});
   try{
     await app.ready();
-    assert.equal((db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get() as {n:number}).n,6);
+    assert.equal((db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get() as {n:number}).n,7);
     await createOwner(db,'a-very-long-test-password');
     const cookie=String((await send('POST','/api/auth/login',{password:'a-very-long-test-password'}))
       .headers['set-cookie']).split(';')[0];
