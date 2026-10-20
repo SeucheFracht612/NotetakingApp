@@ -436,6 +436,8 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
               })}
               {selectedPage&&DIRECTIONS.map(side=>{
                 const link=attachedNeighbor(selectedPage.id,side,layout.edges);
+                if(link && activeFlow?.pageIds.includes(selectedPage.id) &&
+                  activeFlow.pageIds.includes(link))return null;
                 const near=byCoord.get((selectedPage.gx+DELTA[side][0])+':'+(selectedPage.gy+DELTA[side][1]));
                 const center=position(selectedPage);
                 const placement=side==='N'?{left:center.x+pageW/2-18,top:center.y-43}:

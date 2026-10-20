@@ -117,6 +117,8 @@ export function previewPageInsertion(db: AppDatabase, rawId: unknown, payload: u
   const args = requestInsertion(payload);
   const layout = getPageLayout(db, noteId);
   checkVersion(layout, args.expected);
+  preventSplitContinuation(db,noteId,args.anchorId,
+    sideNeighbor(args.anchorId,args.direction,layout.edges));
   return { version: layout.version, plan: checkedPlan(layout, args.anchorId, args.direction) };
 }
 

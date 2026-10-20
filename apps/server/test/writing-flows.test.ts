@@ -63,6 +63,15 @@ test('flow saves a canonical rich document and appends physical downward continu
     assert.equal(appended.statusCode,200,appended.body);
     assert.equal(appended.json().flow.pageIds.length,2);
     assert.equal(appended.json().layout.version,3);
+    assert.equal((await send('POST','/api/notes/'+note+'/pages/preview',{
+      anchorId:root,direction:'S',expectedVersion:3
+    },cookie)).statusCode,409);
+    assert.equal((await send('POST','/api/notes/'+note+'/pages/insert',{
+      anchorId:root,direction:'S',expectedVersion:3
+    },cookie)).statusCode,409);
+    assert.equal((await send('POST','/api/notes/'+note+'/pages/unlink',{
+      fromPageId:root,direction:'S',expectedVersion:3
+    },cookie)).statusCode,409);
     const continuation=appended.json().flow.pageIds[1] as string;
     assert.equal(appended.json().layout.pages.find((p:{id:string})=>p.id===continuation).gy,1);
     assert.equal(appended.json().layout.pages.find((p:{id:string})=>p.id===other).gy,2);
