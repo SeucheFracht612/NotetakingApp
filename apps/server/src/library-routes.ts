@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppDatabase } from './db.js';
 import { registerPageRoutes } from './page-routes.js';
+import { registerWritingFlowRoutes } from './writing-flow-routes.js';
 import { registerCanvasRoutes } from './canvas-routes.js';
 import { registerDocumentRoutes } from './document-routes.js';
 import { ownerForToken, sessionFromCookie } from './auth.js';
@@ -26,6 +27,7 @@ export function registerLibraryRoutes(app: FastifyInstance, db: AppDatabase): vo
   });
 
   registerPageRoutes(app, db);
+  registerWritingFlowRoutes(app,db);
   registerCanvasRoutes(app, db);
   registerDocumentRoutes(app, db);
 
