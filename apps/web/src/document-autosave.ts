@@ -12,6 +12,7 @@ type Transport = (method: 'GET' | 'PUT', url: string, payload?: unknown) => Prom
 const emptyDoc: JsonDoc = { type: 'doc', content: [{ type: 'paragraph' }] };
 const memCache = new Map<string, string>();
 const drafts = new Map<string, PageDraft>();
+const flowDrafts = new Map<string, PageDraft>();
 const same = (a: JsonDoc,b: JsonDoc) => JSON.stringify(a) === JSON.stringify(b);
 
 export async function documentRequest(method: 'GET' | 'PUT', url: string, payload?: unknown): Promise<ServerDocument> {
@@ -58,9 +59,9 @@ export class PageDraft {
   private readonly url:string;
   private readonly key:string;
   constructor(noteId:string,pageId:string,private readonly transport:Transport=documentRequest,
-    private readonly debounce=1000) {
-    this.url='/api/notes/'+noteId+'/pages/'+pageId+'/document';
-    this.key='notetaking:draft:'+noteId+':'+pageId;
+    private readonly debounce=1000, isFlow=false) {
+    this.url='/api/notes/'+noteId+'/pages/'+pageId+(isFlow?'/flow':'/document');
+    this.key='notetaking:'+(isFlow?'flow':'draft')+':'+noteId+':'+pageId;
   }
   getSnapshot=()=>this.snapshot;
   subscribe=(notify:()=>void)=>{this.listeners.add(notify);return ()=>{this.listeners.delete(notify);};};
@@ -158,8 +159,16 @@ export function getDraft(noteId:string,pageId:string):PageDraft {
   if(!draft){draft=new PageDraft(noteId,pageId);drafts.set(key,draft);}
   return draft;
 }
-export function hasUnsavedDrafts():boolean {return [...drafts.values()].some(d=>d.hasPending);}
-export function flushDrafts() {for(const draft of drafts.values())void draft.save();}
+export function getWritingFlowDraft(noteId:string,rootPageId:string):PageDraft {
+  const key=noteId+':'+rootPageId;
+  let draft=flowDrafts.get(key);
+  if(!draft){draft=new PageDraft(noteId,rootPageId,documentRequest,1000,true);flowDrafts.set(key,draft);}
+  return draft;
+}
+export function hasUnsavedDrafts():boolean {
+  return [...drafts.values(),...flowDrafts.values()].some(d=>d.hasPending);
+}
+export function flushDrafts() {for(const draft of [...drafts.values(),...flowDrafts.values()])void draft.save();}
 
 export function forgetDeletedPageDraft(noteId:string,pageId:string) {
   const key=noteId+':'+pageId;
