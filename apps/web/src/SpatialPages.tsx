@@ -52,7 +52,7 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
   const [loading,setLoading]=useState(true);
   const [working,setWorking]=useState(false);
   const [error,setError]=useState('');
-  const [zoom,setZoom]=useState(0.82);
+  const [zoom,setZoom]=useState(0.94);
   const [preview,setPreview]=useState<Preview|null>(null);
   const [showPageActions,setShowPageActions]=useState(false);
   const [selectedItemId,setSelectedItemId]=useState<string|null>(null);
@@ -119,16 +119,20 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
 
   // Documents occupy a stable A4 grid; cards have independent world coordinates.
   // Calculate view bounds from *both* so freeform items can be placed anywhere.
-  const cellW=730*zoom,cellH=1000*zoom,pageW=650*zoom,pageH=920*zoom,pad=100*zoom;
-  const minWorldX=Math.min(bounds.minX*730,...freeform.items.map(item=>item.x));
-  const minWorldY=Math.min(bounds.minY*1000,...freeform.items.map(item=>item.y));
-  const maxWorldX=Math.max(bounds.maxX*730+650,...freeform.items.map(item=>item.x+item.width));
-  const maxWorldY=Math.max(bounds.maxY*1000+920,...freeform.items.map(item=>item.y+item.height));
+  // CSS uses 96 px/in. 210 × 297 mm yields 793.7 × 1122.5 CSS pixels.
+  // Content is laid out unscaled at this size; zoom scales the entire sheet.
+  const A4_W=210*96/25.4,A4_H=297*96/25.4;
+  const STEP_X=880,STEP_Y=1210;
+  const cellW=STEP_X*zoom,cellH=STEP_Y*zoom,pageW=A4_W*zoom,pageH=A4_H*zoom,pad=110*zoom;
+  const minWorldX=Math.min(bounds.minX*STEP_X,...freeform.items.map(item=>item.x));
+  const minWorldY=Math.min(bounds.minY*STEP_Y,...freeform.items.map(item=>item.y));
+  const maxWorldX=Math.max(bounds.maxX*STEP_X+A4_W,...freeform.items.map(item=>item.x+item.width));
+  const maxWorldY=Math.max(bounds.maxY*STEP_Y+A4_H,...freeform.items.map(item=>item.y+item.height));
   const canvasWidth=(maxWorldX-minWorldX)*zoom+pad*2;
   const canvasHeight=(maxWorldY-minWorldY)*zoom+pad*2;
   const position=(page:{gx:number;gy:number})=>({
-    x:pad+(page.gx*730-minWorldX)*zoom,
-    y:pad+(page.gy*1000-minWorldY)*zoom
+    x:pad+(page.gx*STEP_X-minWorldX)*zoom,
+    y:pad+(page.gy*STEP_Y-minWorldY)*zoom
   });
   const itemPosition=(item:{x:number;y:number})=>({
     x:pad+(item.x-minWorldX)*zoom,
@@ -139,8 +143,8 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
     const viewport=scrollRef.current;
     const page=layout.pages.find(value=>value.id===pageId);
     if(!viewport||!page)return;
-    const x=pad+(page.gx*730-minWorldX)*zoom;
-    const y=pad+(page.gy*1000-minWorldY)*zoom;
+    const x=pad+(page.gx*STEP_X-minWorldX)*zoom;
+    const y=pad+(page.gy*STEP_Y-minWorldY)*zoom;
     viewport.scrollTo({left:Math.max(0,x+pageW/2-viewport.clientWidth/2),
       top:Math.max(0,y+pageH/2-viewport.clientHeight/2),behavior});
   },[layout.pages,minWorldX,minWorldY,zoom,pageW,pageH,pad]);
@@ -251,8 +255,8 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
   async function addCard(kind:CanvasKind) {
     // Create near the current writing area, outside the page's right margin.
     const jitter=(freeform.items.length%5)*36;
-    const x=(selectedPage?.gx??0)*730+675+jitter;
-    const y=(selectedPage?.gy??0)*1000+90+jitter;
+    const x=(selectedPage?.gx??0)*STEP_X+A4_W+20+jitter;
+    const y=(selectedPage?.gy??0)*STEP_Y+120+jitter;
     try{
       const item=await freeform.create(kind,x,y);
       setSelectedItemId(item.id);
@@ -362,7 +366,7 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
                       }
                     }}
                     className={'spatial-page'+(active?' is-selected':'')}
-                    style={{left:p.x,top:p.y,width:pageW,height:pageH}}
+                    style={{left:p.x,top:p.y,width:A4_W,height:A4_H,transform:`scale(${zoom})`,transformOrigin:'top left'}}
                     onClick={()=>{if(!active)selectPage(page.id);}}
                     aria-label={'Page '+pageNumbers.get(page.id)+' at '+page.gx+', '+page.gy}>
                     <span className="spatial-page-top">

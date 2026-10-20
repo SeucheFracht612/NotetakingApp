@@ -70,7 +70,7 @@ function EditablePage({ manager,zoom }: {manager:PageDraft;zoom:number}) {
   return <>
     {toolbar && target ? createPortal(toolbar,target) : null}
     {statusTarget ? createPortal(<span className={classes} role="status">{statusLabel}</span>,statusTarget) : null}
-    <div className="page-editor-viewport" ref={viewportRef} style={{fontSize:Math.max(9,15*zoom)}}>
+    <div className="page-editor-viewport" ref={viewportRef}>
       <EditorContent editor={editor} className="page-rich-content" />
     </div>
     <div className="page-editor-footer">

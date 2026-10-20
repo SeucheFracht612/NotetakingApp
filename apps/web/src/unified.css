@@ -176,3 +176,21 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   .spatial-heading-title small {display:none;}
   .spatial-add-items button {padding:5px 7px;}
 }
+
+
+/* Document geometry: one unscaled CSS px coordinate system, 96 CSS px per inch.
+   This gives exactly 210 x 297mm at 100%; the whole surface is scaled by zoom. */
+.spatial-page { border-radius:2px; box-sizing:border-box; }
+.spatial-page-top {height:32px;flex:none;padding:13px 92px 0;letter-spacing:.08em;font-size:10px;}
+.spatial-page-sheet {flex:1;min-height:0;padding:58px 92px 73px;gap:0;overflow:hidden;}
+.spatial-page-footer {height:26px;flex:none;padding:0 92px 12px;font-size:10px;}
+.page-editor-viewport {font-size:16px;line-height:1.5;min-height:0;overflow-y:auto;}
+.page-rich-content .tiptap {font-size:16px;line-height:1.5;min-height:100%;padding:0;}
+.page-rich-content p {margin:0 0 .65em;}
+.page-rich-content h1,.page-rich-content h2,.page-rich-content h3 {line-height:1.25;}
+.page-inactive-preview,.page-preview-writing {font-size:16px;line-height:1.5;white-space:pre-wrap;overflow:hidden;}
+.page-preview-writing {display:-webkit-box;-webkit-line-clamp:28;-webkit-box-orient:vertical;}
+.page-editor-footer {font-size:11px;min-height:22px;}
+@media print {
+  .spatial-page {width:210mm!important;height:297mm!important;transform:none!important;box-shadow:none!important;}
+}
