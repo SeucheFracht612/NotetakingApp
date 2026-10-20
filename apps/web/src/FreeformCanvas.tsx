@@ -3,11 +3,11 @@ import { useCallback,useEffect,useRef,useState, type PointerEvent } from 'react'
 export type CanvasKind='sticky'|'text'|'quote';
 export interface CanvasItem {
   id:string;kind:CanvasKind;x:number;y:number;width:number;height:number;
-  content:string;revision:number;createdAt:number;updatedAt:number;
+  content:string;source:string;locator:string;revision:number;createdAt:number;updatedAt:number;
 }
 interface CanvasState {noteId:string;version:number;items:CanvasItem[]}
 interface ChangeResult {item:CanvasItem;version:number}
-type Changes=Partial<Pick<CanvasItem,'x'|'y'|'width'|'height'|'content'>>;
+type Changes=Partial<Pick<CanvasItem,'x'|'y'|'width'|'height'|'content'|'source'|'locator'>>;
 const failures=new Set<string>();
 export function hasUnsavedFreeform():boolean{return failures.size>0;}
 
@@ -104,27 +104,36 @@ type CardProps={
   onDelete(id:string):Promise<void>;
   onRefresh():Promise<CanvasState>;
 };
-function readDraft(key:string):{content:string;revision:number}|null {
+interface CachedCard { content:string;source:string;locator:string;revision:number }
+function readDraft(key:string):CachedCard|null {
   try {
     const input=sessionStorage.getItem(key);
     if(!input)return null;
-    const parsed=JSON.parse(input) as {content:unknown;revision:unknown};
-    if(typeof parsed.content==='string'&&typeof parsed.revision==='number')return parsed as {content:string;revision:number};
+    const parsed=JSON.parse(input) as {content:unknown;source?:unknown;locator?:unknown;revision:unknown};
+    if(typeof parsed.content==='string'&&typeof parsed.revision==='number')return {
+      content:parsed.content,source:typeof parsed.source==='string'?parsed.source:'',
+      locator:typeof parsed.locator==='string'?parsed.locator:'',revision:parsed.revision
+    };
   }catch{/* session storage disabled */}
   return null;
 }
-function putDraft(key:string,revision:number,content:string) {
-  try{sessionStorage.setItem(key,JSON.stringify({revision,content}));}catch{/* in-memory local state remains */}
+function putDraft(key:string,revision:number,content:string,source:string,locator:string) {
+  try{sessionStorage.setItem(key,JSON.stringify({revision,content,source,locator}));}catch{/* in-memory local state remains */}
 }
 function eraseDraft(key:string){try{sessionStorage.removeItem(key);}catch{/* blocked */}}
 export function FreeformCard({noteId,item,zoom,selected,onSelect,onUpdate,onDelete,onRefresh}:CardProps){
   const cacheKey='freeform:'+noteId+':'+item.id;
   const [initial]=useState(()=>readDraft(cacheKey));
   const [content,setContent]=useState(initial?.content??item.content);
+  const [source,setSource]=useState(initial?.source??item.source);
+  const [locator,setLocator]=useState(initial?.locator??item.locator);
+  const changedSinceServer=Boolean(initial &&
+    (initial.content!==item.content || initial.source!==item.source || initial.locator!==item.locator));
   const [status,setStatus]=useState<'saved'|'unsaved'|'saving'|'error'|'conflict'>(()=>
-    initial && initial.content!==item.content ? initial.revision!==item.revision?'conflict':'unsaved':'saved');
+    changedSinceServer ? initial?.revision!==item.revision?'conflict':'unsaved':'saved');
   const [message,setMessage]=useState('');
-  const latest=useRef(content),statusRef=useRef(status),timer=useRef<ReturnType<typeof setTimeout>|null>(null);
+  const latest=useRef(content),latestSource=useRef(source),latestLocator=useRef(locator);
+  const statusRef=useRef(status),timer=useRef<ReturnType<typeof setTimeout>|null>(null);
   const revisionRef=useRef(item.revision);
   const running=useRef<Promise<void>|null>(null);
   useEffect(()=>{revisionRef.current=item.revision;},[item.revision]);
@@ -134,13 +143,15 @@ export function FreeformCard({noteId,item,zoom,selected,onSelect,onUpdate,onDele
     if(timer.current){clearTimeout(timer.current);timer.current=null;}
     if(running.current) return running.current;
     if(!['unsaved','error'].includes(statusRef.current))return;
-    const sent=latest.current;
+    const sent=latest.current,sentSource=latestSource.current,sentLocator=latestLocator.current;
     setStatus('saving');statusRef.current='saving';
-    const pending=onUpdate(item.id,{content:sent}).then(result=>{
+    const pending=onUpdate(item.id,{content:sent,source:sentSource,locator:sentLocator}).then(result=>{
       revisionRef.current=result.item.revision;
-      if(latest.current===sent){eraseDraft(cacheKey);setStatus('saved');statusRef.current='saved';}
+      if(latest.current===sent&&latestSource.current===sentSource&&latestLocator.current===sentLocator){
+        eraseDraft(cacheKey);setStatus('saved');statusRef.current='saved';
+      }
       else {
-        putDraft(cacheKey,result.item.revision,latest.current);
+        putDraft(cacheKey,result.item.revision,latest.current,latestSource.current,latestLocator.current);
         setStatus('unsaved');statusRef.current='unsaved';
       }
       setMessage('');
@@ -161,7 +172,7 @@ export function FreeformCard({noteId,item,zoom,selected,onSelect,onUpdate,onDele
     timer.current=setTimeout(()=>{void save();},950);
   }
   useEffect(()=>{
-    if(initial && initial.content!==item.content && initial.revision===item.revision)schedule();
+    if(changedSinceServer && initial?.revision===item.revision)schedule();
     return ()=>{
       if(timer.current)clearTimeout(timer.current);
       if(['unsaved','error'].includes(statusRef.current))void save();
@@ -173,7 +184,18 @@ export function FreeformCard({noteId,item,zoom,selected,onSelect,onUpdate,onDele
   function edit(text:string){
     if(text.length>6000)return;
     latest.current=text;setContent(text);
-    putDraft(cacheKey,revisionRef.current,text);
+    putDraft(cacheKey,revisionRef.current,text,latestSource.current,latestLocator.current);
+    if(statusRef.current!=='conflict'){statusRef.current='unsaved';setStatus('unsaved');schedule();}
+  }
+  function editReference(kind:'source'|'locator',text:string){
+    if(kind==='source'){
+      if(text.length>350)return;
+      latestSource.current=text;setSource(text);
+    }else{
+      if(text.length>80)return;
+      latestLocator.current=text;setLocator(text);
+    }
+    putDraft(cacheKey,revisionRef.current,latest.current,latestSource.current,latestLocator.current);
     if(statusRef.current!=='conflict'){statusRef.current='unsaved';setStatus('unsaved');schedule();}
   }
   function drag(event:PointerEvent<HTMLButtonElement>){
@@ -246,7 +268,10 @@ export function FreeformCard({noteId,item,zoom,selected,onSelect,onUpdate,onDele
       const result=await onRefresh();
       const current=result.items.find(entry=>entry.id===item.id);
       if(!current)throw new Error('This card was deleted in another tab');
-      eraseDraft(cacheKey);latest.current=current.content;setContent(current.content);
+      eraseDraft(cacheKey);
+      latest.current=current.content;setContent(current.content);
+      latestSource.current=current.source;setSource(current.source);
+      latestLocator.current=current.locator;setLocator(current.locator);
       revisionRef.current=current.revision;
       statusRef.current='saved';setStatus('saved');setMessage('');
     }catch(cause){
@@ -268,16 +293,25 @@ export function FreeformCard({noteId,item,zoom,selected,onSelect,onUpdate,onDele
           if(timer.current){clearTimeout(timer.current);timer.current=null;}
           statusRef.current='saved';
           void onDelete(item.id).catch(cause=>{
-            putDraft(cacheKey,revisionRef.current,latest.current);
+            putDraft(cacheKey,revisionRef.current,latest.current,latestSource.current,latestLocator.current);
             statusRef.current='error';setStatus('error');
             setMessage(cause instanceof Error?cause.message:'Could not delete the card');
           });
         }}>×</button>
     </div>
+    {item.kind==='quote' && <span className="quote-glyph" aria-hidden="true">“</span>}
     <textarea className="freeform-text" value={content} placeholder={
       item.kind==='quote'?'Paste or write a quotation…':item.kind==='sticky'?'Quick thought…':'Write anything…'}
       spellCheck aria-label={item.kind+' text'} maxLength={6000}
       onChange={e=>edit(e.target.value)} onBlur={()=>{void save();}}/>
+    {item.kind==='quote' && <div className="freeform-citation">
+      <input aria-label="Quotation source" placeholder="Author, title or source"
+        value={source} maxLength={350} onChange={e=>editReference('source',e.target.value)}
+        onBlur={()=>{void save();}}/>
+      <input aria-label="Page number or reference" placeholder="Page / locator"
+        value={locator} maxLength={80} onChange={e=>editReference('locator',e.target.value)}
+        onBlur={()=>{void save();}}/>
+    </div>}
     <div className="freeform-bottom">
       <small className={status==='conflict'||status==='error'?'freeform-problem':''}>
         {status==='saved'?'✓ Saved':status==='saving'?'Saving…':status==='unsaved'?'Unsaved':status==='conflict'?'Conflict — text kept':'Not saved'}
