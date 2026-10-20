@@ -67,6 +67,12 @@ export function registerDocumentRoutes(app: FastifyInstance, db: AppDatabase): v
   app.put<{ Params: PageParams }>('/notes/:noteId/pages/:pageId/document', async (request,reply) => {
     const {expectedRevision,doc}=validateWrite(request.body);
     const result = db.transaction(() => {
+      // A whole writing-flow document supersedes the legacy one-editor-per-
+      // page API. Reject stale old tabs instead of silently diverging data.
+      if(db.prepare('SELECT 1 FROM writing_flow_pages WHERE note_id=? AND page_id=?')
+        .get(request.params.noteId,request.params.pageId)) {
+        throw new LibraryError(409,'This page now belongs to a continuous writing flow. Reload the note; your old-tab draft was not overwritten');
+      }
       const current=readPageDocument(db,request.params);
       if (current.revision !== expectedRevision) {
         throw new LibraryError(409,'Page content changed in another tab; your local draft was not overwritten');
