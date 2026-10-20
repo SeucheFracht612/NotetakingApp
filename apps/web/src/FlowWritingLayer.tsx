@@ -37,6 +37,8 @@ function Surface({manager,PaginationPlus,rootPageId,noteId,pageIds,layoutVersion
   const [pageCount,setPageCount]=useState(1);
   const [error,setError]=useState('');
   const [appending,setAppending]=useState(false);
+  const [pendingPreview,setPendingPreview]=useState<{key:string;shifts:number;groups:number}|null>(null);
+  const [blockedKey,setBlockedKey]=useState<string|null>(null);
   const locked=useRef(false);
   const surface=useRef<HTMLDivElement>(null);
   const editor=useEditor({
@@ -79,25 +81,70 @@ function Surface({manager,PaginationPlus,rootPageId,noteId,pageIds,layoutVersion
     return()=>{cancelAnimationFrame(frame);observer.disconnect();};
   },[editor]);
 
+  // Saved text and physical page placement are independent transactions.
+  // Never silently push a neighboring branch while the user is typing.
+  async function appendContinuation(expectedVersion:number,expectedRevision:number) {
+    if(locked.current)return;
+    locked.current=true;setAppending(true);setError('');setPendingPreview(null);
+    try{
+      const response=await fetch('/api/notes/'+noteId+'/pages/'+rootPageId+'/continue',{
+        method:'POST',credentials:'same-origin',cache:'no-store',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({expectedLayoutVersion:expectedVersion,expectedFlowRevision:expectedRevision})
+      });
+      if(!response.ok){
+        const data=await response.json().catch(()=>({})) as {error?:string};
+        throw new Error(data.error??'Could not attach continuation');
+      }
+      onContinuation(await response.json() as ContinuationResult);
+    }catch(cause){
+      setError(cause instanceof Error?cause.message:'Could not add continuation');
+      setBlockedKey(String(expectedVersion)+':'+expectedRevision+':'+pageIds.length+':'+pageCount);
+    }finally{locked.current=false;setAppending(false);}
+  }
   useEffect(()=>{
-    if(!editor || snapshot.status!=='saved' || pageCount<=pageIds.length || locked.current)return;
+    setBlockedKey(null);setPendingPreview(null);
+  },[layoutVersion,snapshot.revision,pageIds.length]);
+  useEffect(()=>{
+    if(!editor||snapshot.status!=='saved'||pageCount<=pageIds.length||locked.current||pendingPreview)return;
+    const key=String(layoutVersion)+':'+snapshot.revision+':'+pageIds.length+':'+pageCount;
+    if(key===blockedKey)return;
     let active=true;
-    locked.current=true;setAppending(true);setError('');
-    const endpoint='/api/notes/'+noteId+'/pages/'+rootPageId+'/continue';
+    locked.current=true;
+    const tail=pageIds[pageIds.length-1];
+    const endpoint='/api/notes/'+noteId+'/pages/preview';
     void fetch(endpoint,{method:'POST',credentials:'same-origin',cache:'no-store',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({expectedLayoutVersion:layoutVersion,expectedFlowRevision:snapshot.revision})
+      body:JSON.stringify({anchorId:tail,direction:'S',expectedVersion:layoutVersion})
     }).then(async response=>{
       if(!response.ok){
-        const body=await response.json().catch(()=>({})) as {error?:string};
-        throw new Error(body.error??'Could not create continuation page');
+        const data=await response.json().catch(()=>({})) as {error?:string};
+        throw new Error(data.error??'The layout cannot be extended');
       }
-      return response.json() as Promise<ContinuationResult>;
-    }).then(result=>{if(active)onContinuation(result);})
-      .catch(cause=>{if(active)setError(cause instanceof Error?cause.message:'Continuation failed');})
-      .finally(()=>{locked.current=false;if(active)setAppending(false);});
+      return response.json() as Promise<{
+        version:number;plan:{shifts:unknown[];pushedIndependentGroups:number}
+      }>;
+    }).then(result=>{
+      if(!active)return;
+      if(result.plan.shifts.length){
+        setBlockedKey(key);
+        setPendingPreview({key,shifts:result.plan.shifts.length,
+          groups:result.plan.pushedIndependentGroups});
+      }else{
+        // Release the preview lock before starting the atomic append.
+        locked.current=false;
+        void appendContinuation(layoutVersion,snapshot.revision);
+      }
+    }).catch(cause=>{
+      if(active){
+        setError(cause instanceof Error?cause.message:'Cannot create continuation');
+        setBlockedKey(key);
+      }
+    }).finally(()=>{if(active)locked.current=false;});
     return()=>{active=false;};
-  },[editor,snapshot.status,snapshot.revision,pageCount,pageIds.length,layoutVersion,noteId,rootPageId,onContinuation]);
+  },[editor,snapshot.status,snapshot.revision,pageCount,pageIds.length,layoutVersion,
+    noteId,rootPageId,pendingPreview,blockedKey,onContinuation]);
+
 
   const toolbar=editor&&<div className="page-format-toolbar" role="toolbar" aria-label="Writing tools">
     <Tool label="B" onClick={()=>editor.chain().focus().toggleBold().run()}/>
@@ -142,6 +189,29 @@ function Surface({manager,PaginationPlus,rootPageId,noteId,pageIds,layoutVersion
           }
         }}>Discard & reload</button>}
       </div>}
+    {pendingPreview&&<div className="spatial-modal-backdrop">
+      <section role="dialog" aria-modal="true" aria-label="Continue writing"
+        className="spatial-preview">
+        <p className="eyebrow">CONTINUE WRITING</p>
+        <h2>Make room for the next A4 page?</h2>
+        <p>Continuing downward would move {pendingPreview.shifts} existing
+          page{pendingPreview.shifts===1?'':'s'} and {pendingPreview.groups}
+          independent attached group{pendingPreview.groups===1?'':'s'}.
+          Your writing is saved; nothing has moved yet.</p>
+        <div className="spatial-modal-actions">
+          <button type="button" className="secondary-button" onClick={()=>{
+            setBlockedKey(pendingPreview.key);setPendingPreview(null);
+          }}>Not now</button>
+          <button type="button" className="primary-button"
+            onClick={()=>{void appendContinuation(layoutVersion,snapshot.revision);}}>
+            Move pages and continue
+          </button>
+        </div>
+      </section>
+    </div>}
+    {error&&<button className="flow-retry" type="button" onClick={()=>{
+      setError('');setBlockedKey(null);
+    }}>Retry continuation</button>}
     {appending&&<div className="flow-continuation-working" aria-live="polite">Adding continuation page…</div>}
   </>;
 }
