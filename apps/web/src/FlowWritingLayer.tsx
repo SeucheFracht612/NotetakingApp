@@ -109,6 +109,13 @@ function Surface({manager,PaginationPlus,rootPageId,noteId,pageIds,layoutVersion
     if(!editor||snapshot.status!=='saved'||pageCount<=pageIds.length||locked.current||pendingPreview)return;
     const key=String(layoutVersion)+':'+snapshot.revision+':'+pageIds.length+':'+pageCount;
     if(key===blockedKey)return;
+    // A layout-extension feedback loop must not create hundreds of physical
+    // pages. Legitimately huge documents need an explicit later workflow.
+    if(pageCount>50){
+      setError('Pagination detected more than 50 sheets. Automatic page creation is paused; your writing remains saved.');
+      setBlockedKey(key);
+      return;
+    }
     let active=true;
     let forwarded=false;
     locked.current=true;
