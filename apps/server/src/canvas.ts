@@ -8,6 +8,8 @@ export interface CanvasItem {
   kind: CanvasKind;
   x: number; y: number; width: number; height: number;
   content: string;
+  source: string;
+  locator: string;
   revision: number;
   createdAt: number;
   updatedAt: number;
@@ -41,6 +43,12 @@ function checkContent(value: unknown): string {
   }
   return value;
 }
+function referenceField(raw: unknown,label:string,limit:number):string {
+  if(typeof raw!=='string' || raw.length>limit || raw.includes('\u0000')) {
+    throw new LibraryError(400,'Invalid '+label);
+  }
+  return raw;
+}
 function checkKind(value: unknown): CanvasKind {
   if(value!=='sticky' && value!=='text' && value!=='quote') throw new LibraryError(400,'Invalid item kind');
   return value;
@@ -50,7 +58,7 @@ function note(db:AppDatabase, noteId:string) {
 }
 function revision(value:unknown):number { return integer(value,'revision',0,Number.MAX_SAFE_INTEGER); }
 function getItem(db:AppDatabase,noteId:string,itemId:string):CanvasItem {
-  const row=db.prepare('SELECT id,kind,x,y,width,height,content,revision,created_at AS createdAt,updated_at AS updatedAt FROM canvas_items WHERE note_id=? AND id=?')
+  const row=db.prepare('SELECT id,kind,x,y,width,height,content,source,locator,revision,created_at AS createdAt,updated_at AS updatedAt FROM canvas_items WHERE note_id=? AND id=?')
     .get(noteId,itemId) as CanvasRow|undefined;
   if(!row)throw new LibraryError(404,'Canvas item not found');
   return row;
@@ -67,25 +75,27 @@ function advance(db:AppDatabase,noteId:string):number {
 export function getCanvas(db:AppDatabase,rawNote:unknown):CanvasState {
   const noteId=uuid(rawNote);
   note(db,noteId);
-  const items=db.prepare('SELECT id,kind,x,y,width,height,content,revision,created_at AS createdAt,updated_at AS updatedAt FROM canvas_items WHERE note_id=? ORDER BY created_at,id')
+  const items=db.prepare('SELECT id,kind,x,y,width,height,content,source,locator,revision,created_at AS createdAt,updated_at AS updatedAt FROM canvas_items WHERE note_id=? ORDER BY created_at,id')
     .all(noteId) as CanvasItem[];
   return {noteId,version:noteVersion(db,noteId),items};
 }
 export function createCanvasItem(db:AppDatabase,rawNote:unknown,body:unknown):
   {item:CanvasItem;version:number} {
   const noteId=uuid(rawNote);
-  const args=fields(body,['kind','x','y','width','height','content','expectedVersion'],
+  const args=fields(body,['kind','x','y','width','height','content','source','locator','expectedVersion'],
     ['kind','x','y','width','height','expectedVersion']);
   const kind=checkKind(args.kind);
   const x=integer(args.x,'x',-200000,200000),y=integer(args.y,'y',-200000,200000);
   const width=integer(args.width,'width',120,900),height=integer(args.height,'height',90,800);
   const content=args.content===undefined?'':checkContent(args.content),expected=revision(args.expectedVersion);
+  const source=args.source===undefined?'':referenceField(args.source,'source',350);
+  const locator=args.locator===undefined?'':referenceField(args.locator,'locator',80);
   return db.transaction(()=>{
     note(db,noteId);
     if(noteVersion(db,noteId)!==expected)throw new LibraryError(409,'Canvas changed; reload before creating');
     const id=randomUUID(),now=Date.now();
-    db.prepare('INSERT INTO canvas_items (id,note_id,kind,x,y,width,height,content,revision,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,1,?,?)')
-      .run(id,noteId,kind,x,y,width,height,content,now,now);
+    db.prepare('INSERT INTO canvas_items (id,note_id,kind,x,y,width,height,content,source,locator,revision,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,1,?,?)')
+      .run(id,noteId,kind,x,y,width,height,content,source,locator,now,now);
     const version=advance(db,noteId);
     return {item:getItem(db,noteId,id),version};
   }).immediate();
@@ -93,7 +103,7 @@ export function createCanvasItem(db:AppDatabase,rawNote:unknown,body:unknown):
 export function updateCanvasItem(db:AppDatabase,rawNote:unknown,rawItem:unknown,body:unknown):
   {item:CanvasItem;version:number} {
   const noteId=uuid(rawNote),itemId=uuid(rawItem);
-  const args=fields(body,['expectedRevision','x','y','width','height','content'],['expectedRevision']);
+  const args=fields(body,['expectedRevision','x','y','width','height','content','source','locator'],['expectedRevision']);
   if(Object.keys(args).length<2) throw new LibraryError(400,'No canvas change was supplied');
   const expected=revision(args.expectedRevision);
   const x=args.x===undefined?undefined:integer(args.x,'x',-200000,200000);
@@ -101,12 +111,14 @@ export function updateCanvasItem(db:AppDatabase,rawNote:unknown,rawItem:unknown,
   const width=args.width===undefined?undefined:integer(args.width,'width',120,900);
   const height=args.height===undefined?undefined:integer(args.height,'height',90,800);
   const content=args.content===undefined?undefined:checkContent(args.content);
+  const source=args.source===undefined?undefined:referenceField(args.source,'source',350);
+  const locator=args.locator===undefined?undefined:referenceField(args.locator,'locator',80);
   return db.transaction(()=>{
     note(db,noteId);
     const original=getItem(db,noteId,itemId);
     if(original.revision!==expected)throw new LibraryError(409,'This canvas item was changed in another tab; your changes were not overwritten');
-    db.prepare('UPDATE canvas_items SET x=?,y=?,width=?,height=?,content=?,revision=revision+1,updated_at=? WHERE note_id=? AND id=?')
-      .run(x??original.x,y??original.y,width??original.width,height??original.height,content??original.content,Date.now(),noteId,itemId);
+    db.prepare('UPDATE canvas_items SET x=?,y=?,width=?,height=?,content=?,source=?,locator=?,revision=revision+1,updated_at=? WHERE note_id=? AND id=?')
+      .run(x??original.x,y??original.y,width??original.width,height??original.height,content??original.content,source??original.source,locator??original.locator,Date.now(),noteId,itemId);
     const version=advance(db,noteId);
     return {item:getItem(db,noteId,itemId),version};
   }).immediate();

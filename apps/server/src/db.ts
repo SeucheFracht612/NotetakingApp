@@ -133,6 +133,12 @@ const writingFlowMigration = [
   'INSERT INTO writing_flow_pages(note_id,page_id,root_page_id,ordinal) SELECT note_id,id,id,0 FROM note_pages;'
 ].join('\n');
 
+
+const quotationMigration = [
+  "ALTER TABLE canvas_items ADD COLUMN source TEXT NOT NULL DEFAULT '' CHECK(length(source) <= 350);",
+  "ALTER TABLE canvas_items ADD COLUMN locator TEXT NOT NULL DEFAULT '' CHECK(length(locator) <= 80);"
+].join('\n');
+
 export function openDatabase(filename: string): AppDatabase {
   fs.mkdirSync(path.dirname(filename), { recursive: true });
   const db = new Database(filename);
@@ -145,7 +151,7 @@ export function openDatabase(filename: string): AppDatabase {
 
 export function migrate(db: AppDatabase): void {
   db.exec('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)');
-  const migrations = [{ version: 1, sql: initialMigration }, { version: 2, sql: libraryMigration }, { version: 3, sql: pageMigration }, { version: 4, sql: documentMigration }, { version: 5, sql: canvasMigration }, { version: 6, sql: writingFlowMigration }];
+  const migrations = [{ version: 1, sql: initialMigration }, { version: 2, sql: libraryMigration }, { version: 3, sql: pageMigration }, { version: 4, sql: documentMigration }, { version: 5, sql: canvasMigration }, { version: 6, sql: writingFlowMigration }, { version: 7, sql: quotationMigration }];
   for (const migration of migrations) {
     db.transaction(() => {
       const existing = db.prepare('SELECT 1 FROM schema_migrations WHERE version = ?').get(migration.version);
