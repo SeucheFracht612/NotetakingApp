@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { spatialNavigationShortcut } from './spatial-shortcuts';
-import { PageEditor } from './PageEditor';
+import { FlowWritingLayer,type ContinuationResult } from './FlowWritingLayer';
 import { FreeformCard,useFreeformCanvas,hasUnsavedFreeform,type CanvasKind } from './FreeformCanvas';
 import { flushDrafts, hasUnsavedDrafts, forgetDeletedPageDraft } from './document-autosave';
 
@@ -58,6 +58,8 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
   const [selectedItemId,setSelectedItemId]=useState<string|null>(null);
   const [showOverview,setShowOverview]=useState(false);
   const [pagePreviews,setPagePreviews]=useState<Record<string,string>>({});
+  const [activeFlow,setActiveFlow]=useState<{rootPageId:string;pageIds:string[]}|null>(null);
+  const [flowError,setFlowError]=useState('');
   const freeform=useFreeformCanvas(noteId);
   const scrollRef=useRef<HTMLDivElement>(null);
   const shellRef=useRef<HTMLElement>(null);
@@ -84,6 +86,28 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
       .catch(()=>{});
     return ()=>{alive=false;};
   },[noteId,layout.pages.length,selectedId]);
+
+  useEffect(()=>{
+    let alive=true;
+    if(!selectedId){setActiveFlow(null);return;}
+    setActiveFlow(null);setFlowError('');
+    void fetch('/api/notes/'+noteId+'/pages/'+selectedId+'/flow',
+      {credentials:'same-origin',cache:'no-store'})
+      .then(async response=>{
+        if(!response.ok){
+          const problem=await response.json().catch(()=>({})) as {error?:string};
+          throw new Error(problem.error??'Could not load writing flow');
+        }
+        return response.json() as Promise<{rootPageId:string;pageIds:string[]}>;
+      }).then(result=>{if(alive)setActiveFlow(result);})
+      .catch(cause=>{if(alive)setFlowError(cause instanceof Error?cause.message:'Cannot load writing');});
+    return()=>{alive=false;};
+  },[noteId,selectedId]);
+  const handleContinuation=useCallback((result:ContinuationResult)=>{
+    setLayout(result.layout);
+    setActiveFlow({rootPageId:result.flow.rootPageId,pageIds:result.flow.pageIds});
+    setSelectedId(result.flow.pageIds[result.flow.pageIds.length-1]??null);
+  },[]);
   const selectedPage=layout.pages.find(page=>page.id===selectedId)??layout.pages[0]??null;
   const displayOrder=useMemo(()=>[...layout.pages].sort((a,b)=>a.createdAt-b.createdAt||a.id.localeCompare(b.id)),[layout.pages]);
   const pageNumbers=useMemo(()=>new Map(displayOrder.map((p,index)=>[p.id,index+1])),[displayOrder]);
@@ -325,6 +349,7 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
           <button type="button" className={showOverview?'active':''} onClick={()=>setShowOverview(v=>!v)}>Overview</button>
         </div>
       </div>
+      {flowError&&<div role="alert" className="spatial-error">Writing unavailable: {flowError}</div>}
       {freeform.error && <div role="alert" className="spatial-error">{freeform.error}
         <button type="button" onClick={freeform.clearError}>×</button></div>}
       <div className="spatial-body">
@@ -365,7 +390,8 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
                         event.preventDefault();selectPage(page.id);
                       }
                     }}
-                    className={'spatial-page'+(active?' is-selected':'')}
+                    className={'spatial-page'+(active?' is-selected':'')+
+                      (activeFlow?.pageIds.includes(page.id)?' flow-covered':'')}
                     style={{left:p.x,top:p.y,width:A4_W,height:A4_H,transform:`scale(${zoom})`,transformOrigin:'top left'}}
                     onClick={()=>{if(!active)selectPage(page.id);}}
                     aria-label={'Page '+pageNumbers.get(page.id)+' at '+page.gx+', '+page.gy}>
@@ -373,8 +399,8 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
                       <span>PAGE {pageNumbers.get(page.id)}</span><span>A4</span>
                     </span>
                     <div className="spatial-page-sheet">
-                      {active
-                        ? <PageEditor noteId={noteId} pageId={page.id} zoom={zoom}/>
+                      {activeFlow?.pageIds.includes(page.id)
+                        ? <div className="flow-placeholder" aria-hidden="true"/>
                         : <div className="page-inactive-preview">
                             {pagePreviews[page.id]
                               ? <div className="page-preview-writing">{pagePreviews[page.id]}</div>
@@ -385,6 +411,16 @@ export function SpatialPages({noteId,noteTitle,onBack,onToggleLibrary}:SpatialPa
                   </div>
                 );
               })}
+              {activeFlow&&(()=>{
+                const root=layout.pages.find(p=>p.id===activeFlow.rootPageId);
+                if(!root)return null;
+                const p=position(root);
+                return <FlowWritingLayer key={activeFlow.rootPageId}
+                  noteId={noteId} rootPageId={activeFlow.rootPageId}
+                  pageIds={activeFlow.pageIds} layoutVersion={layout.version}
+                  x={p.x} y={p.y} zoom={zoom}
+                  onContinuation={handleContinuation}/>;
+              })()}
               {freeform.items.map(item=>{
                 const p=itemPosition(item);
                 return <div key={item.id} className="freeform-position" data-canvas-id={item.id}
